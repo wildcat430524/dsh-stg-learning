@@ -6,12 +6,28 @@ app.disableHardwareAcceleration();
 app.whenReady().then(async()=>{
   const w=new BrowserWindow({width:1200,height:870,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
   const errors=[];w.webContents.on('console-message',(_e,level,message)=>{if(level===3)errors.push(message);});
+  const external=[];w.webContents.setWindowOpenHandler(({url})=>{external.push(url);return {action:'deny'};});
   const evalJS=code=>w.webContents.executeJavaScript(code,true);
   try{
     await w.loadFile(path.join(__dirname,'../artifacts/preview.html'));
     while(!await evalJS("!!document.querySelector('.stgl-card')"))await new Promise(r=>setTimeout(r,60));
     assert.equal(await evalJS("document.querySelectorAll('.stgl-card').length"),2);
-    assert.equal(await evalJS("document.querySelector('.stgl-download').href"),'https://github.com/wildcat430524/STG-Desk/releases/latest');
+    const originalURL=w.webContents.getURL();
+    const expectedLinks=[
+      ['.stgl-download','https://github.com/wildcat430524/STG-Desk'],
+      ['.stgl-resource:first-child a:first-child','https://github.com/wildcat430524/StepsToGreat/archive/refs/heads/main.zip'],
+      ['.stgl-resource:first-child a:last-child','https://github.com/wildcat430524/StepsToGreat'],
+      ['.stgl-resource:last-child a:first-child','https://github.com/wildcat430524/STG-Desk/releases/latest'],
+      ['.stgl-resource:last-child a:last-child','https://github.com/wildcat430524/STG-Desk']
+    ];
+    await evalJS("window.hostLinkClicks=0;document.addEventListener('click',e=>{if(e.target.closest('a'))window.hostLinkClicks++;})");
+    for(const [selector,url] of expectedLinks){
+      assert.equal(await evalJS(`document.querySelector(${JSON.stringify(selector)}).href`),url);
+      await evalJS(`document.querySelector(${JSON.stringify(selector)}).click()`);
+      assert.equal(external.at(-1),url);
+      assert.equal(w.webContents.getURL(),originalURL);
+    }
+    assert.equal(await evalJS('window.hostLinkClicks'),0);
     assert.equal(await evalJS("document.querySelector('.stgl-badge').textContent"),'当前对话');
     await evalJS("document.querySelector('.stgl-pin').click()");
     assert.equal(await evalJS("document.querySelector('.stgl-pin').getAttribute('aria-pressed')"),'true');
@@ -51,6 +67,6 @@ app.whenReady().then(async()=>{
     w.webContents.debugger.attach('1.3');await w.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     assert.equal(await evalJS("getComputedStyle(document.querySelector('.stgl-primary')).transitionDuration"),'0s');
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,evidence:['Ordinary native-session-shaped rows rendered; subagent hidden','Pinned and learning-workspace marks saved locally','Stage and pinned-only filters; correct empty state','Narrow layout without horizontal overflow; dark theme tokens honored','Continue invokes the original session identity','Create opens the native new-session identity','Reduced-motion honored; no renderer errors'],screenshot:'artifacts/learning-page.png'},null,2));
+    console.log(JSON.stringify({passed:true,externalLinks:external,evidence:['Project, ZIP and Windows download clicks open the exact external URL; learning page stays in place; host document click handler is bypassed','Ordinary native-session-shaped rows rendered; subagent hidden','Pinned and learning-workspace marks saved locally','Stage and pinned-only filters; correct empty state','Narrow layout without horizontal overflow; dark theme tokens honored','Continue invokes the original session identity','Create opens the native new-session identity','Reduced-motion honored; no renderer errors'],screenshot:'artifacts/learning-page.png'},null,2));
   }catch(e){console.error(e);process.exitCode=1;}finally{w.destroy();app.exit(process.exitCode||0);}
 });

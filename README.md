@@ -2,9 +2,9 @@
 
 **在 DeepSeek Harness（DSH）里管理学习工作区与学习会话的插件**：把散落在 DSH 里的对话按学习工作区集中起来，为每段对话记下课程、阶段和个人置顶，然后一键回到 DSH 原生会话继续。
 
-当前版本 **0.1.3**。插件与 [STG Desk](https://github.com/wildcat430524/STG-Desk) 是两个**独立项目**；STG Desk 的学习页面、文档编辑、侧边对话和浮窗保持原样，本插件不改动它们。
+当前版本 **0.1.4**。插件与 [STG Desk](https://github.com/wildcat430524/STG-Desk) 是两个**独立项目**；STG Desk 的学习页面、文档编辑、侧边对话和浮窗保持原样，本插件不改动它们。
 
-**[⬇ 下载插件（Releases）](https://github.com/wildcat430524/dsh-stg-learning/releases/latest)** ｜ **[⬇ 下载 STG Desk（可选，Releases）](https://github.com/wildcat430524/STG-Desk/releases/latest)**
+**[⬇ 下载插件（Releases）](https://github.com/wildcat430524/dsh-stg-learning/releases/latest)** ｜ **[⬇ 下载 STG Desk（可选，Releases）](https://github.com/wildcat430524/STG-Desk/releases/latest)** ｜ **[⬇ 下载 StepsToGreat ZIP](https://github.com/wildcat430524/StepsToGreat/archive/refs/heads/main.zip)**
 
 > 只想要学习会话管理：装本插件即可，不需要 STG Desk。需要一个配套的学习文档/作答应用：再装 STG Desk。
 
@@ -23,17 +23,17 @@ DSH STG Learning 在 DSH 左侧栏加一个 **学习** 入口，用一个独立�
 
 ## 界面预览
 
-集中管理学习工作区与会话，关联课程、设置阶段和置顶，再回到 DSH 原生对话。顶部提供 STG Desk 下载与协作入口，页面跟随宿主主题。
+集中管理学习工作区与会话，关联课程、设置阶段和置顶，再回到 DSH 原生对话。顶部提供 STG Desk 项目主页与协作入口，下方的下载区提供 StepsToGreat ZIP、Windows 便携版发布页和两个项目主页。页面跟随宿主主题。
 
-![DSH STG Learning 深色界面：学习工作区、阶段筛选、置顶会话与 STG Desk 下载入口](docs/screenshots/learning-sessions.png)
+![DSH STG Learning 深色界面：学习工作区、阶段筛选、置顶会话与项目下载入口](docs/screenshots/learning-sessions.png)
 
 此图为插件真实组件在隔离验证环境中的预览，使用演示工作区与会话数据；不代表真实学习进度或宿主完整窗口。
 
-### 浅色主题与阶段筛选
+### 浅色主题与置顶筛选
 
-页面跟随宿主主题。下图切换到「待复习」后没有匹配会话，显示筛选空状态；上方仍保留工作区、搜索和新会话入口。
+页面跟随宿主主题。下图开启「只看置顶」后显示已置顶的学习会话；上方仍保留项目下载区、工作区、搜索和新会话入口。
 
-![浅色主题：待复习筛选与没有符合条件的会话提示](docs/screenshots/learning-light-filter.png)
+![浅色主题：项目下载区与置顶会话筛选](docs/screenshots/learning-light-filter.png)
 
 ### 窄窗口布局
 
@@ -52,7 +52,8 @@ DSH STG Learning 在 DSH 左侧栏加一个 **学习** 入口，用一个独立�
 | 搜索 | 按会话标题或课程名做大小写不敏感搜索。 |
 | 继续原会话 | “继续对话”调用 DSH 原生能力打开该会话，聊天记录保持原样，不新建副本。 |
 | 新建学习会话 | 工具栏“＋ 新会话”在选中的工作区内用 DSH 原生服务新建会话并立即打开；未选中工作区时该按钮禁用。空状态里也提供同一个入口。 |
-| STG 协作 | 可展开的“STG 协作”设置：首页提供“下载 STG Desk”链接，并可填写本机 STG Desk 应用路径后从插件打开。 |
+| 项目与下载 | 下载 StepsToGreat ZIP；分别查看 StepsToGreat、STG Desk 项目主页；打开 STG Desk 最新 Windows 便携版发布页。外部链接在新窗口打开，保留学习页面。 |
+| STG 协作 | 可展开的“STG 协作”设置，可填写本机 STG Desk 应用路径后从插件打开。 |
 | 界面与无障碍 | 跟随宿主主题变量（深浅色）、键盘焦点可见、`aria-pressed` 状态、减少动态效果（`prefers-reduced-motion`）；窄窗口下工具栏自动换行。 |
 | 空状态引导 | 无工作区、无会话、筛选无结果三种情况分别给出说明和下一步按钮。 |
 
@@ -60,7 +61,7 @@ DSH STG Learning 在 DSH 左侧栏加一个 **学习** 入口，用一个独立�
 
 ### 1. 下载安装包
 
-从 [插件 Releases](https://github.com/wildcat430524/dsh-stg-learning/releases/latest) 下载 `.tgz` 包（例如 `dsh-stg-learning-0.1.3.tgz`）。也可以自己从源码打包（见[开发与构建](#开发与构建)）。
+从 [插件 Releases](https://github.com/wildcat430524/dsh-stg-learning/releases/latest) 下载 `.tgz` 包（例如 `dsh-stg-learning-0.1.4.tgz`）。也可以自己从源码打包（见[开发与构建](#开发与构建)）。
 
 ### 2. 安装（桌面版优先使用官方插件管理页面）
 
@@ -73,7 +74,7 @@ DSH STG Learning 在 DSH 左侧栏加一个 **学习** 入口，用一个独立�
 > 命令行安装是可选的备用方式，命令名与可用 profile 名称取决于你的 DSH 版本；桌面版请优先使用官方插件管理页面，避免误用另一个旧版 `dsh` 命令改到别的 profile。
 
 ```text
-dsh plugin --profile web add /完整路径/dsh-stg-learning-0.1.3.tgz
+dsh plugin --profile web add /完整路径/dsh-stg-learning-0.1.4.tgz
 ```
 
 ### 3. 第一次使用
@@ -110,7 +111,15 @@ dsh plugin --profile web add /完整路径/dsh-stg-learning-0.1.3.tgz
 3. 在 STG Desk 里连接 DSH，并在对话菜单选择**同一个会话**。
 4. 两边沿用同一段 DSH 会话与 DSH 当前可调用的模型；STG Desk 的界面保持原样。
 
-配置入口：插件页右上角 **“STG 协作 ↗”** 展开后可填写 STG Desk 应用路径；“**下载 STG Desk ↗**”打开它的 Releases 页面。
+配置入口：插件页右上角 **“STG 协作 ↗”** 展开后可填写 STG Desk 应用路径。
+
+下载区提供明确的独立入口：
+
+- **下载 StepsToGreat ZIP ↓**：下载学习文件夹，解压后在 DSH 中添加 `StepsToGreat-main` 文件夹作为工作区。
+- **下载 Windows 便携版 ↗**：打开 STG Desk 的最新发布页，下载 `STG-Desk-<版本号>-Windows.exe`。
+- 两张卡片上的 **项目主页 ↗**：打开对应 GitHub 项目，查看介绍、截图和使用说明。右上角 **STG Desk 项目 ↗** 同样打开项目主页。
+
+这些入口在外部新窗口打开，不替换当前学习管理页面。
 
 请注意：“打开 STG Desk”只是启动你填写的那个本机应用，**不会自动切换**它已经打开的文档或工作区，也不会自动导入课程。
 
@@ -128,7 +137,7 @@ dsh plugin --profile web add /完整路径/dsh-stg-learning-0.1.3.tgz
 
 ### 没安装 STG Desk，插件还能用吗？
 
-能。学习工作区标记、课程与阶段整理、置顶、搜索、继续原会话、新建会话**都不依赖 STG Desk**。“下载 STG Desk”和“打开 STG Desk”只是可选入口；文档阅读、编辑和作答由 STG Desk 提供，本插件不内置 STG 应用。
+能。学习工作区标记、课程与阶段整理、置顶、搜索、继续原会话、新建会话**都不依赖 STG Desk**。STG Desk 的下载和启动只是可选入口；文档阅读、编辑和作答由 STG Desk 提供，本插件不内置 STG 应用。
 
 ### 模型在哪里配置？
 
@@ -211,7 +220,7 @@ npm pack        # prepack 会自动先构建，产出 dsh-stg-learning-<version>
 
 - 数据层测试通过；隔离 Electron 页面验证了真实数据结构渲染、保存置顶与工作区标记、继续原会话、新建回调和减少动态效果。
 - 早期版本已在 DSH 原生窗口验证“学习”入口、工作区切换和继续已有会话；更新安装返回 `restart-required`。
-- 0.1.3 的下载入口、当前会话识别、课程保存与应用启动参数在隔离环境中验证；新版原生界面需要重启后验收。
+- 0.1.4 新增 StepsToGreat 下载区，区分项目主页与 Windows 发布页；隔离 Electron 中逐个点击五个外部链接，验证新窗口 URL、保留学习页面及阻止冒泡到宿主文档点击处理器；深浅色、420px 窄窗口和原有会话操作验证通过。新版原生界面需要重启后验收。
 
 **未覆盖 / 不做承诺**：
 

@@ -5,7 +5,13 @@ import { css } from './style.js';
 const KEY = 'dsh-stg-learning.v1';
 const APP_KEY = 'dsh-stg-learning.app.v1';
 const WORKSPACE_KEY = 'dsh-stg-learning.workspace.v1';
-const STG_DOWNLOAD = 'https://github.com/wildcat430524/STG-Desk/releases/latest';
+const STG_PROJECT = 'https://github.com/wildcat430524/STG-Desk';
+const STEPS_PROJECT = 'https://github.com/wildcat430524/StepsToGreat';
+function ProjectLink({ href, children, ...props }) {
+  // Keep host click handlers from treating an external link as an internal route.
+  // The browser/Electron still performs the anchor's normal new-window action.
+  return <a {...props} href={href} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>{children}</a>;
+}
 function readMetadata() { try { return normalizeMetadata(JSON.parse(localStorage.getItem(KEY))); } catch { return normalizeMetadata(null); } }
 function useSource(source) {
   const store = useMemo(() => ({ subscribe: f => source.subscribe(f), get: () => source.getSnapshot() }), [source]);
@@ -70,8 +76,12 @@ export function LearningPanel({ services }) {
   }, []);
   if (sessions.phase !== 'ready' || workspaces.phase !== 'ready') return <div className="stgl-page"><div className="stgl-loading">正在读取 DSH 工作区与会话…</div><button onClick={()=>services.layout.selectPanel(null)}>返回对话</button></div>;
   return <section className="stgl-page" aria-label="STG 学习管理"><div className="stgl-inner">
-    <header className="stgl-heading"><div><div className="stgl-eyebrow"><BookIcon size={15}/> STG LEARNING</div><h1>学习会话</h1><p className="stgl-subtitle">整理课程与对话，从上次的进度继续。</p></div><div className="stgl-heading-actions"><a className="stgl-download" href={STG_DOWNLOAD} target="_blank" rel="noopener noreferrer">下载 STG Desk ↗</a><button aria-expanded={showCollab} aria-controls="stgl-collab" onClick={()=>setShowCollab(!showCollab)}>STG 协作 ↗</button><button onClick={()=>services.layout.selectPanel(null)}>返回对话</button></div></header>
+    <header className="stgl-heading"><div><div className="stgl-eyebrow"><BookIcon size={15}/> STG LEARNING</div><h1>学习会话</h1><p className="stgl-subtitle">整理课程与对话，从上次的进度继续。</p></div><div className="stgl-heading-actions"><ProjectLink className="stgl-download" href={STG_PROJECT} title="打开 STG Desk 项目主页，查看介绍和下载">STG Desk 项目 ↗</ProjectLink><button aria-expanded={showCollab} aria-controls="stgl-collab" onClick={()=>setShowCollab(!showCollab)}>STG 协作 ↗</button><button onClick={()=>services.layout.selectPanel(null)}>返回对话</button></div></header>
     {notice && <div role="status" className="stgl-notice">{notice}</div>}
+    <section className="stgl-resources" aria-label="项目与下载">
+      <article className="stgl-resource"><div className="stgl-resource-heading"><BookIcon/><h2>StepsToGreat</h2><span>学习文件夹</span></div><p>下载导师协议，解压后在 DSH 中添加这个文件夹，开始学习。</p><div className="stgl-resource-links"><ProjectLink href={`${STEPS_PROJECT}/archive/refs/heads/main.zip`}>下载 StepsToGreat ZIP ↓</ProjectLink><ProjectLink href={STEPS_PROJECT}>项目主页 ↗</ProjectLink></div></article>
+      <article className="stgl-resource"><div className="stgl-resource-heading"><BookIcon/><h2>STG Desk</h2><span>Windows 工作台</span></div><p>阅读教学、编辑文档和作答。下载便携版后，导入同一个学习文件夹。</p><div className="stgl-resource-links"><ProjectLink href={`${STG_PROJECT}/releases/latest`}>下载 Windows 便携版 ↗</ProjectLink><ProjectLink href={STG_PROJECT}>项目主页 ↗</ProjectLink></div></article>
+    </section>
     {showCollab&&<section id="stgl-collab" className="stgl-config"><h2>与 STG Desk 一起学习</h2><p>在 STG 中导入相同文件夹并选择同一个 DSH 会话，即可继续同步对话。</p><label className="stgl-time" htmlFor="stgl-app">STG Desk 应用路径（可选）</label><div className="stgl-toolbar"><input id="stgl-app" placeholder="STG Desk.exe 的完整路径" value={app} onChange={e=>setApp(e.target.value)} onBlur={()=>{try{localStorage.setItem(APP_KEY,app.trim());}catch{setNotice('应用路径未保存。');}}}/><button disabled={busy||!app.trim()} onClick={launch}>打开 STG Desk ↗</button></div></section>}
     <section className="stgl-controls" aria-label="会话筛选"><div className="stgl-toolbar"><label className="stgl-workspace-label"><span>工作区</span><select className="stgl-workspace" aria-label="学习工作区" value={targetId} onChange={e=>selectWorkspace(e.target.value)}>{(enabled.length>0||targetId==='*')&&<option value="*">全部学习工作区</option>}{items.map(w=><option key={w.workspaceId} value={w.workspaceId}>{metadata.workspaces[w.workspaceId]?.enabled?'学习 · ':''}{w.title||w.path}</option>)}</select></label><input className="stgl-search" aria-label="搜索学习会话" placeholder="搜索会话或课程…" value={query} onChange={e=>setQuery(e.target.value)}/><button className="stgl-primary" disabled={busy||!workspace} onClick={create}>＋ 新会话</button></div>
     {workspace&&<div className="stgl-workspace-meta"><span className="stgl-time" title={workspace.path}>{workspace.path}</span><button aria-pressed={!!metadata.workspaces[targetId]?.enabled} onClick={()=>commit({...metadata,workspaces:{...metadata.workspaces,[targetId]:{enabled:!metadata.workspaces[targetId]?.enabled}}})}>{metadata.workspaces[targetId]?.enabled?'✓ 学习工作区':'设为学习工作区'}</button></div>}</section>
