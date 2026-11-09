@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { normalizeMetadata, learningSessions, currentSessionId } from './model.js';
 import { css } from './style.js';
+import { applyNative } from './native.js';
+import { RichEditor } from './editor/RichEditor.jsx';
+import { createWorkbenchApi } from './api.js';
+import 'katex/dist/katex.css';
 
 const KEY = 'dsh-stg-learning.v1';
 const APP_KEY = 'dsh-stg-learning.app.v1';
-const WORKSPACE_KEY = 'dsh-stg-learning.workspace.v1';
+const WORKSPACE_KEY = 'stg-learning.space.v2';
 const STG_PROJECT = 'https://github.com/wildcat430524/STG-Desk';
 const STEPS_PROJECT = 'https://github.com/wildcat430524/StepsToGreat';
 function ProjectLink({ href, children, ...props }) {
@@ -33,14 +37,20 @@ function SessionCard({ row, update, open, showPath }) {
 }
 export function LearningPanel({ services }) {
   const sessions = useSource(services.sessions.list), workspaces = useSource(services.workspaces.list);
+  const [learningIds, setLearningIds] = useState([]);
+  useEffect(() => {
+    const abort = new AbortController();
+    services.api.library({}, { signal: abort.signal }).then(result => { if (!abort.signal.aborted) setLearningIds((result.items || []).map(w => w.workspaceId)); }).catch(error => { if (!abort.signal.aborted) { setLearningIds([]); setNotice(error.message); } });
+    return () => abort.abort();
+  }, [services, workspaces.items]);
   const [metadata, setMetadata] = useState(readMetadata), [selected, setSelected] = useState(() => { try { return localStorage.getItem(WORKSPACE_KEY) || ''; } catch { return ''; } }), [query, setQuery] = useState('');
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [app, setApp] = useState(() => { try { return localStorage.getItem(APP_KEY) || ''; } catch { return ''; } });
   const [stageFilter,setStageFilter]=useState('all'),[pinnedOnly,setPinnedOnly]=useState(false),[showCollab,setShowCollab]=useState(false);
   const metadataRef = useRef(metadata);
   metadataRef.current = metadata;
-  const items = workspaces.items || [], enabled = items.filter(w => metadata.workspaces[w.workspaceId]?.enabled);
+  const items = (workspaces.items || []).filter(w => learningIds.includes(w.workspaceId)), enabled = items;
   const currentWorkspace = items.find(w => w.sessionIds?.includes(currentSessionId(sessions)));
-  const targetId = selected === '*' || items.some(w => w.workspaceId === selected) ? selected : enabled[0]?.workspaceId || currentWorkspace?.workspaceId || items[0]?.workspaceId || '';
+  const targetId = items.some(w => w.workspaceId === selected) ? selected : '';
   function selectWorkspace(id) { setSelected(id); try { localStorage.setItem(WORKSPACE_KEY,id); } catch { setNotice('工作区选择未保存。'); } }
   const workspace = items.find(w => w.workspaceId === targetId);
   const visible = targetId === '*' ? enabled : workspace ? [workspace] : [];
@@ -57,7 +67,10 @@ export function LearningPanel({ services }) {
   async function create() {
     if (!workspace) return;
     await action(async () => {
-      const id = await services.sessions.create({workspaceId:workspace.workspaceId});
+      const result = await services.sessions.create({workspaceId:workspace.workspaceId,agentPreset:'stg-learning-mentor'});
+      if(result?.ok===false)throw Error(result.error?.message||'无法创建会话。');
+      const id = typeof result==='string'?result:result?.value?.sessionId||result?.sessionId;
+      if(!id)throw Error('宿主没有返回有效的会话。');
       update(id,{course:'',stage:'learning',pinned:false});
       services.uiWorkspace.openSession(id);
     });
@@ -83,18 +96,18 @@ export function LearningPanel({ services }) {
       <article className="stgl-resource"><div className="stgl-resource-heading"><BookIcon/><h2>STG Desk</h2><span>Windows 工作台</span></div><p>阅读教学、编辑文档和作答。下载便携版后，导入同一个学习文件夹。</p><div className="stgl-resource-links"><ProjectLink href={`${STG_PROJECT}/releases/latest`}>下载 Windows 便携版 ↗</ProjectLink><ProjectLink href={STG_PROJECT}>项目主页 ↗</ProjectLink></div></article>
     </section>
     {showCollab&&<section id="stgl-collab" className="stgl-config"><h2>与 STG Desk 一起学习</h2><p>在 STG 中导入相同文件夹并选择同一个 DSH 会话，即可继续同步对话。</p><label className="stgl-time" htmlFor="stgl-app">STG Desk 应用路径（可选）</label><div className="stgl-toolbar"><input id="stgl-app" placeholder="STG Desk.exe 的完整路径" value={app} onChange={e=>setApp(e.target.value)} onBlur={()=>{try{localStorage.setItem(APP_KEY,app.trim());}catch{setNotice('应用路径未保存。');}}}/><button disabled={busy||!app.trim()} onClick={launch}>打开 STG Desk ↗</button></div></section>}
-    <section className="stgl-controls" aria-label="会话筛选"><div className="stgl-toolbar"><label className="stgl-workspace-label"><span>工作区</span><select className="stgl-workspace" aria-label="学习工作区" value={targetId} onChange={e=>selectWorkspace(e.target.value)}>{(enabled.length>0||targetId==='*')&&<option value="*">全部学习工作区</option>}{items.map(w=><option key={w.workspaceId} value={w.workspaceId}>{metadata.workspaces[w.workspaceId]?.enabled?'学习 · ':''}{w.title||w.path}</option>)}</select></label><input className="stgl-search" aria-label="搜索学习会话" placeholder="搜索会话或课程…" value={query} onChange={e=>setQuery(e.target.value)}/><button className="stgl-primary" disabled={busy||!workspace} onClick={create}>＋ 新会话</button></div>
-    {workspace&&<div className="stgl-workspace-meta"><span className="stgl-time" title={workspace.path}>{workspace.path}</span><button aria-pressed={!!metadata.workspaces[targetId]?.enabled} onClick={()=>commit({...metadata,workspaces:{...metadata.workspaces,[targetId]:{enabled:!metadata.workspaces[targetId]?.enabled}}})}>{metadata.workspaces[targetId]?.enabled?'✓ 学习工作区':'设为学习工作区'}</button></div>}</section>
+    <section className="stgl-controls" aria-label="会话筛选"><div className="stgl-toolbar"><span className="stgl-workspace-label">{workspace?.title || '请先打开一个学习空间'}</span><button onClick={()=>services.layout.selectPanel('stg-learning')}>返回学习工作台</button><input className="stgl-search" aria-label="搜索学习会话" placeholder="搜索会话或课程…" value={query} onChange={e=>setQuery(e.target.value)}/><button className="stgl-primary" disabled={busy||!workspace} onClick={create}>＋ 新会话</button></div>
+    {workspace&&<div className="stgl-workspace-meta"><span className="stgl-time" title={workspace.path}>{workspace.path}</span><span>StepsToGreat 学习空间</span></div>}</section>
     <div className="stgl-filterbar"><div className="stgl-tabs" role="group" aria-label="学习标记筛选">{[['all','全部'],['learning','学习中'],['review','待复习'],['done','已结束']].map(([id,label])=><button key={id} aria-pressed={stageFilter===id} className={stageFilter===id?'active':''} onClick={()=>setStageFilter(id)}>{label}<span>{allRows.filter(r=>id==='all'||r.stage===id).length}</span></button>)}</div><button className={'stgl-only-pin'+(pinnedOnly?' active':'')} aria-pressed={pinnedOnly} onClick={()=>setPinnedOnly(!pinnedOnly)}>只看置顶</button></div>
     <div className="stgl-count" aria-live="polite">{rows.length} 个会话{query?' · 搜索结果':''}<span>置顶优先 · 最近活跃</span></div>
     {rows.length?<div className="stgl-grid">{rows.map(row=><SessionCard key={row.id} row={row} update={update} open={open} showPath={targetId==='*'}/>)}</div>:<div className="stgl-empty"><BookIcon size={28}/><h2>{query||stageFilter!=='all'||pinnedOnly?'没有符合条件的会话':items.length?'开始一段新的学习':'先添加学习工作区'}</h2><p>{query||stageFilter!=='all'||pinnedOnly?'试试其他关键词，或调整上方筛选。':items.length?'在这个工作区新建会话，记录课程中的问题和想法。':'在 DSH 左侧添加你的学习文件夹，再回到这里。'}</p>{workspace&&!query&&stageFilter==='all'&&!pinnedOnly&&<button disabled={busy} onClick={create}>＋ 新学习会话</button>}</div>}
     <p className="stgl-note">课程和阶段仅用于个人整理，不修改学习档案。</p>
   </div></section>;
 }
-export const inject = ['slots','sessions','workspaces','uiWorkspace','layout','remote'];
+export const inject = ['slots','sessions','workspaces','uiWorkspace','layout','remote','uiSession','conversation'];
 export function apply(ctx) {
   ctx.effect(() => { const style=document.createElement('style');style.dataset.plugin='dsh-stg-learning';style.textContent=css;document.head.append(style);return()=>style.remove(); },'stg-learning: scoped styles');
-  const services={sessions:ctx.sessions,workspaces:ctx.workspaces,uiWorkspace:ctx.uiWorkspace,layout:ctx.layout,remote:ctx.remote};
-  ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'stg-learning',inject:()=>({services})},LearningPanel));
-  ctx.slots.inject('sidebar.panellist',()=>ctx.slots.register({name:'sidebar.panellist',id:'stg-learning',order:35,label:()=> '学习'},BookIcon));
+  const services={api:createWorkbenchApi(),sessions:ctx.sessions,workspaces:ctx.workspaces,uiWorkspace:ctx.uiWorkspace,layout:ctx.layout,remote:ctx.remote};
+  ctx.slots.inject('main',()=>ctx.slots.register({name:'main',key:'stg-learning-sessions',inject:()=>({services})},LearningPanel));
+  applyNative(ctx,{renderDocumentEditor:props=><RichEditor {...props}/>,onManageSessions:()=>ctx.layout.selectPanel('stg-learning-sessions')});
 }

@@ -1,0 +1,68 @@
+{
+  "name": "steps2great-skill",
+  "version": "1.2.0",
+  "private": false,
+  "description": "把任何支持 Agent Skills 的 AI 变成一对一导师：Socratic 引导 + 掌握学习法，三维评估全 ✅ 才推进下一课。 An Agent Skill that turns any AI into a one-on-one Socratic mastery tutor.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "steps2great-init": "scripts/init-workspace.mjs",
+    "steps2great-update": "scripts/update.mjs"
+  },
+  "scripts": {
+    "init": "node scripts/init-workspace.mjs",
+    "update": "node scripts/update.mjs --check",
+    "check": "node scripts/check.mjs",
+    "test": "node tests/regression-state.mjs && node scripts/validate-state.mjs --fixtures assets/project/tests/fixtures && node tests/regression-sync.mjs && node --test tests/materials.test.mjs tests/behavior-eval.test.mjs tests/progress-view.test.mjs tests/project-workspace.test.mjs",
+    "test:behavior": "node --test tests/behavior-eval.test.mjs",
+    "eval:behavior": "node scripts/behavior-eval.mjs",
+    "test:materials": "node --test tests/materials.test.mjs",
+    "test:project": "node --test tests/project-workspace.test.mjs",
+    "test:state": "node tests/regression-state.mjs && node scripts/validate-state.mjs --fixtures assets/project/tests/fixtures",
+    "test:sync": "node tests/regression-sync.mjs",
+    "verify:load": "node _build/verify-skill-load.mjs",
+    "sync": "node _build/sync-from-upstream.mjs",
+    "score": "node _build/score-workspace.mjs",
+    "verify": "node _build/verify-skill-load.mjs && node tests/regression-state.mjs && node scripts/validate-state.mjs --fixtures assets/project/tests/fixtures && node tests/regression-sync.mjs && node --test tests/materials.test.mjs tests/behavior-eval.test.mjs tests/progress-view.test.mjs tests/project-workspace.test.mjs && node scripts/check.mjs",
+    "test:progress": "node --test tests/progress-view.test.mjs"
+  },
+  "files": [
+    "SKILL.md",
+    "references/",
+    "templates/",
+    "assets/",
+    "docs/",
+    "CONTRIBUTING.md",
+    "tests/",
+    "_build/",
+    ".github/workflows/check.yml",
+    "scripts/",
+    "evals/behavior/",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "LICENSE-DOCS"
+  ],
+  "keywords": [
+    "agent-skill",
+    "claude-skill",
+    "skill",
+    "ai-tutor",
+    "education",
+    "mastery-learning",
+    "socratic",
+    "prompt-engineering",
+    "markdown"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wildcat430524/Steps2Great-skill.git"
+  },
+  "homepage": "https://github.com/wildcat430524/Steps2Great-skill#readme",
+  "bugs": {
+    "url": "https://github.com/wildcat430524/Steps2Great-skill/issues"
+  }
+}

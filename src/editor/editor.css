@@ -1,0 +1,73 @@
+/* Direct-editing document surface. There is deliberately no resident toolbar,
+   mode switch or editor chrome: the document body itself is the editor, as in
+   STG Desk. Only the in-place code/formula handles are styled here.
+
+   Typography follows the reader tokens defined in workbench/experience-style.js
+   (--stgw-font / --stgw-mono / --stgw-paper ...). The family is stated on the
+   edit node itself, so Chinese text never falls back to a different face inside
+   ProseMirror while the surrounding chrome uses the system UI stack. */
+.stgw-rich{min-width:0;--stgw-editor-border:var(--stgw-line,#e6e9ef);color:inherit}
+.stgw-editor-surface[hidden]{display:none}.stgw-editor-surface{min-height:320px}
+.stgw-rich .visual-document{min-height:280px;outline:none;overflow-wrap:anywhere;font-family:var(--stgw-font,"Segoe UI Variable Text","Microsoft YaHei","PingFang SC","Microsoft YaHei UI","Hiragino Sans GB",system-ui,sans-serif);font-size:16px;line-height:1.85;tab-size:4;caret-color:var(--stgw-accent,inherit);color:var(--stgw-ink,inherit);background:transparent}
+.stgw-rich .visual-document>:first-child{margin-top:0}.stgw-rich .visual-document>:last-child{margin-bottom:0}
+.stgw-rich .visual-document p{margin:0 0 1.05em}
+.stgw-rich .visual-document h1{font-size:30px;line-height:1.4;letter-spacing:-.018em;margin:0 0 .7em;font-weight:600;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document h2{font-size:24px;line-height:1.45;letter-spacing:-.012em;margin:1.45em 0 .6em;font-weight:600;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document h3{font-size:19px;line-height:1.55;letter-spacing:-.005em;margin:1.35em 0 .5em;font-weight:600;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document :is(h4,h5,h6){font-size:16px;margin:1.2em 0 .5em;font-weight:600;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document ul,.stgw-rich .visual-document ol{padding-left:24px;margin:12px 0 18px}
+.stgw-rich .visual-document li{margin:5px 0;padding-left:3px}.stgw-rich .visual-document li>p{margin-bottom:7px}
+.stgw-rich .visual-document li::marker{color:var(--stgw-faint,#8b95a3)}
+.stgw-rich .visual-document strong{font-weight:600;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document a{color:var(--stgw-accent,#4779dc);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--stgw-accent,#4779dc) 30%,transparent);text-underline-offset:3px}
+.stgw-rich .visual-document a:hover{border-bottom-color:var(--stgw-accent,#4779dc)}
+/* Code: one continuous panel — a low toolbar and the block share a 12px
+   radius, a hairline and a quiet tint instead of a split form header. */
+.stgw-root .stgw-rich .visual-document pre,:is([data-stg-workbench]) .stgw-rich .visual-document pre{overflow:auto;max-width:100%;margin:0 0 1.5em;padding:16px 20px 18px;border:1px solid var(--stgw-code-line,#e6e9ef);border-radius:12px;background:var(--stgw-code-bg,#fbfcfe);color:var(--stgw-ink,#27303d);font-family:var(--stgw-mono,"Cascadia Code",Consolas,"SFMono-Regular",ui-monospace,monospace);font-size:14px;line-height:1.75;tab-size:4}
+.stgw-rich .visual-document code{font-family:var(--stgw-mono,"Cascadia Code",Consolas,"SFMono-Regular",ui-monospace,monospace);font-size:.9em}
+.stgw-rich .visual-document blockquote{margin:1.4em 0;padding:2px 0 2px 16px;border-left:2px solid color-mix(in srgb,var(--stgw-accent,#4779dc) 55%,var(--stgw-line,#e6e9ef));color:var(--stgw-muted,#5f6a79)}
+.stgw-rich .visual-document blockquote p{margin:0 0 .4em}.stgw-rich .visual-document blockquote p:last-child{margin:0}
+.stgw-rich .visual-document .tableWrapper{overflow:auto;margin:1.3em 0;border:1px solid var(--stgw-code-line,#e6e9ef);border-radius:12px}
+.stgw-rich .visual-document table{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;font-size:14.5px;line-height:1.7}
+.stgw-rich .visual-document :is(td,th){border:0;border-bottom:1px solid var(--stgw-code-line,#e6e9ef);border-right:1px solid var(--stgw-code-line,#e6e9ef);min-width:65px;padding:10px 14px;position:relative;vertical-align:top}
+.stgw-rich .visual-document :is(td,th):last-child{border-right:0}
+.stgw-rich .visual-document tr:last-child :is(td,th){border-bottom:0}
+.stgw-rich .visual-document :is(td,th) p{margin:0}
+.stgw-rich .visual-document th{background:var(--stgw-soft,#f2f4f7);font-weight:600;text-align:left;color:var(--stgw-heading,inherit)}
+.stgw-rich .visual-document tbody tr:hover td{background:color-mix(in srgb,var(--stgw-accent,#4779dc) 3%,transparent)}
+.stgw-rich .visual-document img{display:block;max-width:100%;height:auto;border-radius:10px;margin:18px auto}
+.stgw-rich .visual-document hr{border:0;border-top:1px solid var(--stgw-line,#e6e9ef);margin:2.4em 0}
+.stgw-rich .visual-document ul[data-type=taskList]{list-style:none;padding-left:0}.stgw-rich .visual-document ul[data-type=taskList]>li{display:flex;gap:10px;align-items:baseline;margin:7px 0}.stgw-rich .visual-document ul[data-type=taskList]>li>label{flex:none;display:flex;align-items:center}.stgw-rich .visual-document ul[data-type=taskList]>li>div{flex:1;min-width:0}.stgw-rich .visual-document ul[data-type=taskList]>li p{margin:0}.stgw-rich .visual-document ul[data-type=taskList] input[type=checkbox]{width:15px;height:15px;margin:0;accent-color:var(--stgw-accent,#4779dc)}
+.stgw-rich .visual-document .ProseMirror-selectednode{outline:2px solid var(--stgw-accent,#4779dc)}.stgw-rich .visual-document .selectedCell:after{content:"";position:absolute;inset:0;background:Highlight;opacity:.12;pointer-events:none}
+.stgw-rich .visual-preserved{margin:1em 0}.stgw-rich .visual-preserved-marker{margin:0;height:6px}.stgw-rich .visual-preserved-preview>:first-child{margin-top:0}.stgw-rich .visual-preserved-preview>:last-child{margin-bottom:0}
+.stgw-rich .visual-math{display:inline-block;cursor:pointer}.stgw-rich .visual-math-block,.stgw-rich .edh-math-block{display:block;max-width:100%;overflow:auto;cursor:pointer}
+/* In-place code toolbar. `margin-top` groups it with the following block and
+   `margin-bottom:0` plus the pre's `border-top:0` keeps them one panel. */
+:is(.stgw-root,[data-stg-workbench]) .stgw-rich .edh-code-tools{display:flex;align-items:center;gap:4px;justify-content:flex-end;user-select:none;margin:1.4em 0 0;padding:3px 8px 3px 12px;min-height:30px;border:1px solid var(--stgw-code-line,#e6e9ef);border-bottom:0;border-radius:12px 12px 0 0;background:var(--stgw-code-toolbar,#f5f7fb);font-family:var(--stgw-font,inherit);font-size:11px;line-height:1.5;color:var(--stgw-faint,#8b95a3)}
+.stgw-rich .edh-code-tools+.visual-preserved{margin-top:1.4em}
+.stgw-rich .edh-code-language-label{display:none}:is(.stgw-root,[data-stg-workbench]) .stgw-rich .edh-code-tools select.edh-code-language{margin-right:auto;min-height:24px;max-width:150px;padding:2px 22px 2px 6px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--stgw-ink,#27303d);font-family:inherit;font-size:11px;line-height:1.4;cursor:pointer}
+.stgw-rich .edh-code-tools :is(select,button):hover{background:color-mix(in srgb,var(--stgw-ink,#27303d) 6%,transparent)!important;border-color:var(--stgw-code-line,#e6e9ef)!important;color:var(--stgw-ink,#27303d)!important}
+:is(.stgw-root,[data-stg-workbench]) .stgw-rich .edh-code-tools button.edh-code-copy{min-height:24px;padding:2px 8px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--stgw-faint,#8b95a3);font:inherit;font-size:11px;cursor:pointer}
+.stgw-rich .edh-code-copy[data-state=copied]{color:#2f8a5b!important}.stgw-rich .edh-code-copy[data-state=failed]{color:var(--stgw-danger,#b4493c)!important}
+.stgw-rich .edh-code-copy::before{content:'';display:inline-block;vertical-align:-2px;margin-right:5px;width:12px;height:12px;background:currentColor;mask:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4'/%3E%3C/svg%3E")}
+:is(.stgw-root,[data-stg-workbench]) .stgw-rich .visual-document .edh-code-tools+pre{border-top:0;border-radius:0 0 12px 12px}
+.stgw-rich .edh-math-error{color:var(--stgw-danger,#b4493c);border:1px dashed color-mix(in srgb,var(--stgw-danger,#b4493c) 35%,transparent)}
+.stgw-editor-error{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:0 0 14px;background:var(--stgw-soft,#f2f4f7);color:var(--stgw-muted,#5f6a79);border:1px solid var(--stgw-editor-border);border-radius:8px;font-size:12px}
+.stgw-editor-error span{flex:1;min-width:0}
+.stgw-editor-error button{border:1px solid var(--stgw-editor-border);background:var(--stgw-paper,Canvas);border-radius:6px;padding:4px 10px;cursor:pointer;font:inherit;font-size:12px;color:inherit}
+.stgw-editor-source{display:block;resize:vertical;box-sizing:border-box;width:100%;min-height:420px;padding:16px;border:1px solid var(--stgw-editor-border);border-radius:8px;outline:none;background:transparent;color:inherit;font:12px/1.85 var(--stgw-mono,ui-monospace,SFMono-Regular,Consolas,monospace);tab-size:2}
+.stgw-rich :is(button,select,textarea,input):focus-visible{outline:2px solid var(--stgw-accent,Highlight);outline-offset:2px}
+.stgw-math-dialog{box-sizing:border-box;width:min(520px,calc(100vw - 32px));border:1px solid var(--stgw-editor-border);border-radius:12px;padding:24px;color:var(--stgw-ink,CanvasText);background:var(--stgw-paper,Canvas);box-shadow:0 12px 50px #0003}
+.stgw-math-dialog::backdrop{background:#0006}.stgw-math-dialog h2{font-size:18px;margin:0 0 18px}.stgw-math-dialog label{display:block;font-size:13px}.stgw-math-dialog textarea{box-sizing:border-box;width:100%;margin:8px 0;border:1px solid var(--stgw-editor-border);border-radius:6px;padding:10px;background:transparent;color:inherit;font:14px/1.6 var(--stgw-mono,Consolas,monospace)}.stgw-math-inline{display:flex!important;gap:8px;align-items:center}.stgw-math-preview{min-height:64px;padding:20px 0;overflow:auto}.stgw-math-actions{display:flex;gap:8px;justify-content:flex-end}.stgw-math-actions button{padding:7px 14px;border:1px solid var(--stgw-editor-border);border-radius:6px;background:var(--stgw-soft,Canvas);color:inherit;cursor:pointer}
+@media(max-width:570px){.stgw-rich .visual-document{font-size:15.5px;line-height:1.85}.stgw-rich .visual-document h1{font-size:26px}.stgw-rich .visual-document h2{font-size:22px}.stgw-rich .visual-document h3{font-size:18px}.stgw-root .stgw-rich .visual-document pre,:is([data-stg-workbench]) .stgw-rich .visual-document pre{font-size:13px;padding:14px 16px 16px;border-radius:10px}:is(.stgw-root,[data-stg-workbench]) .stgw-rich .edh-code-tools{border-radius:10px 10px 0 0}.stgw-rich .edh-code-tools+pre{border-radius:0 0 10px 10px}.stgw-editor-source{padding:12px}.stgw-editor-surface{min-height:280px}}
+/* STG Desk's syntax roles, scoped to the live editor and adapted to host ink. */
+.stgw-rich .visual-document :not(pre)>code{background:var(--stgw-soft,#f2f4f7);border:1px solid color-mix(in srgb,var(--stgw-line,#e6e9ef) 70%,transparent);padding:1.5px 5px;border-radius:5px;font-size:.88em;color:color-mix(in srgb,var(--stgw-ink,#27303d) 92%,var(--stgw-accent,#4779dc))}
+.stgw-rich .visual-document pre code{font-size:inherit;background:none;border:0;padding:0;color:inherit}
+.stgw-rich .visual-document :is(.hljs-comment,.hljs-quote){color:var(--stgw-faint,#8b95a3);font-style:italic}
+.stgw-rich .visual-document :is(.hljs-keyword,.hljs-doctag,.hljs-formula){color:color-mix(in srgb,#b35ca8 78%,var(--stgw-ink,#27303d))}
+.stgw-rich .visual-document :is(.hljs-string,.hljs-regexp,.hljs-addition,.hljs-attribute){color:color-mix(in srgb,#4a8a55 82%,var(--stgw-ink,#27303d))}
+.stgw-rich .visual-document :is(.hljs-number,.hljs-type,.hljs-attr,.hljs-variable){color:color-mix(in srgb,#b1863f 80%,var(--stgw-ink,#27303d))}
+.stgw-rich .visual-document :is(.hljs-title,.hljs-built_in,.hljs-literal){color:color-mix(in srgb,#3f81c9 82%,var(--stgw-ink,#27303d))}
+.stgw-rich .visual-document :is(.hljs-name,.hljs-deletion,.hljs-selector-tag){color:color-mix(in srgb,#c4646c 80%,var(--stgw-ink,#27303d))}
+.stgw-rich .visual-document .hljs-emphasis{font-style:italic}.stgw-rich .visual-document .hljs-strong{font-weight:700}
+@media(max-width:570px){:is(.stgw-root,[data-stg-workbench]) .stgw-rich .visual-document .edh-code-tools+pre{border-radius:0 0 10px 10px}}
