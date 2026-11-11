@@ -1,4 +1,5 @@
 import { flattenFiles, initialLocation, normalizeCourses } from './model.js';
+import { CLARIFY_START_NOTE, DIRECT_START_NOTE, EMPTY_DIRECT_NOTE, SAVED_CONTINUE_HINT, SAVED_OPENING_NOTE, SAVED_OPENING_STALE, SAVED_RESTART_EMPTY, SAVED_RESTART_HINT } from '../start-guidance.js';
 
 export const SETUP_MODES = ['clarify', 'direct'];
 export const SETUP_STEPS = [
@@ -38,5 +39,31 @@ export function deriveJourney(overview) {
     savedSessionId: overview?.state?.courseSessions?.[courseKey] || overview?.state?.courseSessions?._workspace || null,
     nextAction: phase !== 'clarify' && typeof overview?.current?.status === 'string' ? overview.current.status : '',
     placementPath: placement?.path || null, routePath: route?.path || null,
+  };
+}
+
+/**
+ * The opening page's explicit choice when a saved conversation already exists.
+ *
+ * A saved conversation is only "continue"-able while the host still lists it in
+ * this Workspace; a stale binding (archived or deleted elsewhere) must not look
+ * like a conversation the buttons can reopen. Restart is always available and
+ * only applies the edited topic when the learner actually presses it.
+ */
+export function deriveOpeningPlan({ savedSessionId, savedAvailable = true, brief = '', mode = 'direct' } = {}) {
+  const saved = typeof savedSessionId === 'string' && savedSessionId ? savedSessionId : '';
+  const usable = Boolean(saved && savedAvailable);
+  const hasBrief = typeof brief === 'string' && brief.trim() !== '';
+  return {
+    savedSessionId: saved,
+    canContinue: usable,
+    // A stale or archived binding is reported, not silently offered.
+    stale: Boolean(saved && !savedAvailable),
+    canRestart: true,
+    continueHint: SAVED_CONTINUE_HINT,
+    restartHint: mode === 'clarify' ? CLARIFY_START_NOTE : hasBrief ? SAVED_RESTART_HINT : SAVED_RESTART_EMPTY,
+    openingNote: SAVED_OPENING_NOTE,
+    staleNote: SAVED_OPENING_STALE,
+    startNote: mode === 'clarify' ? CLARIFY_START_NOTE : hasBrief ? DIRECT_START_NOTE : EMPTY_DIRECT_NOTE,
   };
 }

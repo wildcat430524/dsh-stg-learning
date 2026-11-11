@@ -1,15 +1,25 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Navigation.jsx';
+import { ArchiveConfirm } from './ArchiveConfirm.jsx';
+import { archiveTitle } from '../session-archive.js';
 
 /**
  * The teacher header's conversation switcher. It lives in the panel header, so
  * the same compact control works docked and floating. The menu is a top-layer
  * popover: the panel clips its own overflow and animates its geometry, and a
  * normal absolutely-positioned menu would be cut off at small sizes.
+ *
+ * The menu also owns the only "delete" surface: one selected row moves to the
+ * Host's recoverable archive after a confirmation that repeats the exact title.
+ * Nothing here is permanent — the archived section below the list restores it.
  */
-export function TeacherSessionSwitcher({ sessions = [], currentId = '', busy = false, error = '', status = '', onSelect, onNew }) {
+export function TeacherSessionSwitcher({
+  sessions = [], currentId = '', busy = false, error = '', status = '', onSelect, onNew,
+  archivedSessions = [], archiveRequest = null, archiveBusy = false, archiveError = '',
+  onArchive, onArchiveConfirm, onArchiveCancel, onRestore,
+}) {
   const menuId = useId().replace(/:/g, ''), trigger = useRef(null), popup = useRef(null), firstItem = useRef(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false), [showArchived, setShowArchived] = useState(false);
   const close = (restoreFocus = false) => { popup.current?.hidePopover(); setOpen(false); if (restoreFocus) trigger.current?.focus({ preventScroll: true }); };
   const place = () => {
     const menu = popup.current, anchor = trigger.current?.getBoundingClientRect();
@@ -41,6 +51,9 @@ export function TeacherSessionSwitcher({ sessions = [], currentId = '', busy = f
   }, [menuId]);
   // A switched conversation or a closed teacher must not leave a stale menu.
   useEffect(() => { if (busy) close(); }, [busy]);
+  // The confirmation is its own focus surface; the menu stays mounted beneath
+  // it so cancelling returns to the same list instead of losing the row.
+  useEffect(() => { if (archiveRequest) close(); }, [archiveRequest]);
   const choose = (action, value) => { close(true); action?.(value); };
   return <>
     <button ref={trigger} type="button" className="stgt-session-trigger" data-session={currentId || undefined} aria-label={currentId ? '切换老师对话，或开始新对话' : '老师对话'} aria-haspopup="menu" aria-controls={menuId} aria-expanded={open}
@@ -67,16 +80,35 @@ export function TeacherSessionSwitcher({ sessions = [], currentId = '', busy = f
       </button>
       <div role="separator" className="stgt-session-divider"/>
       <div className="stgt-session-list" role="group" aria-label="当前学习空间的老师对话">
-        {sessions.map(row => <button key={row.id} type="button" role="menuitemradio" aria-checked={row.id === currentId} disabled={busy || row.id === currentId} data-session-id={row.id} className="stgt-session-option" onClick={() => choose(onSelect, row.id)} title={row.title || row.label}>
-          <span className="stgt-session-mark" aria-hidden="true"><Icon name={row.blank ? 'chat' : 'history'} size={13}/></span>
-          <span className="stgt-session-labels"><span>{row.label}</span><small>{row.hint}</small></span>
-          <span className="stgt-session-check" aria-hidden="true">{row.id === currentId && <Icon name="check" size={14}/>}</span>
-        </button>)}
+        {sessions.map(row => <div key={row.id} className="stgt-session-row">
+          <button type="button" role="menuitemradio" aria-checked={row.id === currentId} disabled={busy || archiveBusy || row.id === currentId} data-session-id={row.id} className="stgt-session-option" onClick={() => choose(onSelect, row.id)} title={row.title || row.label}>
+            <span className="stgt-session-mark" aria-hidden="true"><Icon name={row.blank ? 'chat' : 'history'} size={13}/></span>
+            <span className="stgt-session-labels"><span>{row.label}</span><small>{row.hint}</small></span>
+            <span className="stgt-session-check" aria-hidden="true">{row.id === currentId && <Icon name="check" size={14}/>}</span>
+          </button>
+          <button type="button" role="menuitem" className="stgt-session-remove" aria-label={`移出对话：${archiveTitle(row)}`} title={`移出“${archiveTitle(row)}”（可恢复）`} disabled={busy || archiveBusy} onClick={() => { close(); onArchive?.(row); }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>
+          </button>
+        </div>)}
         {!sessions.length && <p className="stgt-session-empty" role="status">这个学习空间还没有老师对话，先点“新对话”。</p>}
       </div>
-      {(error || status || busy) && <div className={'stgt-session-foot' + (error ? ' stgt-session-foot-error' : '')} role={error ? 'alert' : 'status'}>{busy ? '正在切换，请稍候…' : error || status}</div>}
+      <div role="separator" className="stgt-session-divider"/>
+      <button type="button" role="menuitem" className="stgt-session-archived-toggle" aria-expanded={showArchived} onClick={() => setShowArchived(value => !value)}>
+        <span className="stgt-session-mark" aria-hidden="true"><Icon name="history" size={13}/></span>
+        <span className="stgt-session-labels"><span>已移出{archivedSessions.length ? `（${archivedSessions.length}）` : ''}</span><small>移出的对话仍保留，可在这里恢复</small></span>
+        <svg className="stgt-session-caret" width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ rotate: showArchived ? '180deg' : undefined }}><path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </button>
+      {showArchived && <div className="stgt-session-list stgt-session-archived" role="group" aria-label="已移出的老师对话">
+        {archivedSessions.map(row => <div key={row.id} className="stgt-session-row">
+          <span className="stgt-session-labels" aria-hidden="true"><span>{row.label}</span><small>{row.hint}</small></span>
+          <button type="button" role="menuitem" className="stgt-session-restore" aria-label={`恢复对话：${archiveTitle(row)}`} title={`恢复“${archiveTitle(row)}”`} disabled={busy || archiveBusy} onClick={() => { close(); onRestore?.(row); }}>恢复</button>
+        </div>)}
+        {!archivedSessions.length && <p className="stgt-session-empty" role="status">没有已移出的对话。移出后可在这里恢复。</p>}
+      </div>}
+      {(error || status || busy || archiveError) && <div className={'stgt-session-foot' + (error || archiveError ? ' stgt-session-foot-error' : '')} role={error || archiveError ? 'alert' : 'status'}>{error || archiveError || (busy ? '正在切换，请稍候…' : status)}</div>}
     </div>
-    <span className="stgt-sr" role="status" aria-live="polite">{busy ? '正在切换老师对话' : error || status}</span>
+    {archiveRequest && <ArchiveConfirm request={archiveRequest} busy={archiveBusy} error={archiveError} onCancel={onArchiveCancel} onConfirm={onArchiveConfirm}/>}
+    <span className="stgt-sr" role="status" aria-live="polite">{busy ? '正在切换老师对话' : archiveBusy ? '正在移出老师对话' : archiveError || status}</span>
   </>;
 }
 
@@ -101,6 +133,25 @@ export const teacherSessionsCSS = `
 .stgt-session-labels>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.stgt-session-labels small{font-size:10px;color:var(--teacher-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stgt-session-check{width:14px;flex-shrink:0;color:var(--teacher-accent)}.stgt-session-empty{padding:14px 12px;margin:0;font-size:11px;line-height:1.6;color:var(--teacher-muted)}
 .stgt-session-foot{padding:8px 14px;border-top:1px solid color-mix(in srgb,var(--teacher-line) 65%,transparent);font-size:10px;color:var(--teacher-muted)}.stgt-session-foot-error{color:var(--dsw-alias-state-error-primary,#b44)}
+/* One row = the selectable conversation plus its separate "move out" action;
+   the two must be siblings so a mis-click cannot switch and remove at once. */
+.stgt-session-row{display:flex;align-items:center;gap:2px;min-width:0}
+.stgt-session-menu .stgt-session-row>button.stgt-session-option{flex:1;min-width:0;width:auto}
+.stgt-session-menu button.stgt-session-remove{display:grid;place-items:center;flex:none;width:26px;min-height:26px;height:26px;padding:0;margin-right:3px;border-radius:6px;color:var(--teacher-muted);opacity:.72}
+.stgt-session-menu button.stgt-session-remove:hover:not(:disabled),.stgt-session-menu button.stgt-session-remove:focus-visible{opacity:1;color:var(--dsw-alias-state-error-primary,#b44);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#b44) 8%,transparent)}
+.stgt-session-menu button.stgt-session-archived-toggle{gap:9px;padding:7px 9px;margin:0 6px}
+.stgt-session-menu button.stgt-session-archived-toggle .stgt-session-caret{margin-left:auto;transition:rotate 140ms}
+.stgt-session-archived{padding-top:0}
+.stgt-session-menu .stgt-session-archived .stgt-session-row{padding:0 4px;gap:6px}
+.stgt-session-archived .stgt-session-labels{padding:4px 3px;min-width:0}
+.stgt-session-archived .stgt-session-labels>span{color:var(--teacher-muted)}
+.stgt-session-menu button.stgt-session-restore{flex:none;width:auto;min-height:26px;padding:3px 9px;border:1px solid var(--teacher-line);border-radius:6px;font-size:11px;color:var(--teacher-ink)}
+.stgt-session-menu button.stgt-session-restore:hover:not(:disabled){border-color:var(--teacher-accent);color:var(--teacher-accent)}
+/* The confirmation covers the teacher panel itself: the panel is the focus
+   surface at every docked/floating size, and the popover cannot host a modal.
+   Its own CSS travels with ArchiveConfirm so the session page can reuse it. */
+.stgt-session-menu .stga-backdrop{position:absolute}
+.stgt-session-menu .stgt-archive-dialog button{width:auto}
 .stgt-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){.stgt-session-menu:popover-open{animation:none}.stgt-session-caret{transition:none}}
 @media(forced-colors:active){.stgt-session-menu{border-color:CanvasText}.stgt-session-menu button[aria-checked=true]{outline:1px solid Highlight}}

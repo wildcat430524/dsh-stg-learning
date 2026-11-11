@@ -148,6 +148,41 @@ try {
   assert.ok([browser.originalSessionId, browser.newSessionId].includes(bound));
   checks.push('cross-space teacher conversation never entered this space list, draft storage or course binding');
 
+  // The plugin's "移出" path relies on the Host's recoverable archive, so the
+  // contract it depends on is verified here against the real controller: the
+  // transcript and its workspace slot survive, the archive set carries the id,
+  // another space's conversation is untouched, and unarchive restores it.
+  const workspaces = ctx.get('workspaceController');
+  const registry = ctx.get('workspaceRegistry');
+  // The Host-side controller takes a request object (`{ sessionId }`), unlike the
+  // client-side convenience face the plugin consumes. Both are the same archive.
+  assert.equal(typeof workspaces?.archiveSession, 'function', 'This Host exposes no recoverable session archive');
+  assert.equal(typeof workspaces?.unarchiveSession, 'function', 'This Host exposes no session unarchive');
+  assert.deepEqual(registry.archivedSessionIds, [], 'the isolated profile must start with an empty archive set');
+  const target = browser.newSessionId;
+  const archivedSet = await workspaces.archiveSession({ sessionId: target });
+  assert.deepEqual(archivedSet.archivedSessionIds, [target], 'archiving returns the complete resulting archive set');
+  assert.ok(registry.archivedSessionIds.includes(target), 'archiving must add exactly the named Session to the archive set');
+  assert.equal(registry.archivedSessionIds.includes(foreignId), false, 'archiving must not touch another space');
+  // The Host keeps the accounting slot: an archived conversation is hidden from
+  // grouping surfaces, not deleted from the Workspace or its transcript.
+  const workspaceAfter = registry.list().find(item => item.id === workspace.id);
+  assert.ok(workspaceAfter?.sessionIds?.includes(target), 'an archived Session keeps its workspace slot');
+  const stillListed = await ctx.get('sessionController').list({}, new AbortController().signal);
+  assert.ok(stillListed.items.some(item => item.sessionId === target), 'an archived Session is still a real Session');
+  checks.push('the real Host archives a teacher conversation recoverably: archive set updated, workspace slot and Session retained');
+  await workspaces.unarchiveSession({ sessionId: target });
+  assert.equal(registry.archivedSessionIds.includes(target), false, 'unarchive must drop the id again');
+  await workspaces.unarchiveSession({ sessionId: target });
+  assert.equal(registry.archivedSessionIds.includes(target), false, 'a repeated unarchive is idempotent');
+  checks.push('the real Host restores the conversation, and a repeated restore is idempotent');
+  // A refusal names its reason instead of silently succeeding: an unknown id is
+  // refused before any archive is written.
+  const refused = await workspaces.archiveSession({ sessionId: 'session-that-does-not-exist' }).then(() => null, error => error);
+  assert.ok(refused, 'archiving an unknown Session must be refused');
+  assert.equal(registry.archivedSessionIds.includes('session-that-does-not-exist'), false);
+  checks.push('an unknown Session is refused and leaves the archive set unchanged');
+
   success = true;
   await unlink(path.join(output, 'failure.txt')).catch(error => { if (error.code !== 'ENOENT') throw error; });
 } catch (error) {

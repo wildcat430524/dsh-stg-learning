@@ -1,6 +1,6 @@
 {
   "name": "dsh-stg-learning",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "description": "DSH 原生 STG 学习工作台：课程、文档、作答、复习与导师会话",
   "type": "module",
   "license": "MIT",

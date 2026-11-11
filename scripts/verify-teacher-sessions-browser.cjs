@@ -48,8 +48,17 @@ app.whenReady().then(async () => {
     throw Error('Could not stage a draft in the native teacher composer');
   };
   const openSwitcher = async () => {
-    await js("document.querySelector('.stgt-session-trigger')?.click()");
-    await wait("!!document.querySelector('.stgt-session-menu:popover-open')");
+    // The menu closes itself whenever the archive confirmation opens, so a
+    // reopened menu can race the previous close; retry the invoker instead of
+    // assuming one click is enough.
+    const until = Date.now() + 15000;
+    while (Date.now() < until) {
+      if (await js("!!document.querySelector('.stgt-session-menu:popover-open')")) return;
+      await js("document.querySelector('.stgt-session-trigger')?.click()");
+      await new Promise(r => setTimeout(r, 150));
+    }
+    const state = await js(`(()=>{const m=document.querySelector('.stgt-session-menu'),t=document.querySelector('.stgt-session-trigger');return JSON.stringify({menu:!!m,trigger:!!t,open:m?.matches(':popover-open')??null,openAttr:m?.getAttribute('popover')??null,dialog:!!document.querySelector('.stga-dialog'),teacher:!!document.querySelector('.stgt-teacher'),body:document.body.innerText.slice(0,180)});})()`);
+    throw Error('Could not open the teacher conversation switcher: ' + state);
   };
   const closeSwitcher = async () => {
     await js("document.querySelector('.stgt-session-menu')?.hidePopover()");
@@ -217,6 +226,69 @@ app.whenReady().then(async () => {
     assert.equal(await currentSession(), newSessionId);
     checks.push('full native main-conversation round trip keeps the selected teacher conversation');
     await shot('teacher-session-restored');
+
+    // The recoverable archive, end to end through the real UI. The target is the
+    // conversation that is *not* open: the ticket requires that removing another
+    // conversation keeps the current one, its history and its draft untouched.
+    // Put the conversation that owns the history and the draft back on screen
+    // first, so both really have to survive the archive of the other one.
+    await openSwitcher();
+    await js(`[...document.querySelectorAll('.stgt-session-menu [data-session-id]')].find(e=>e.dataset.sessionId===${JSON.stringify(originalSessionId)}).click()`);
+    await wait(`document.querySelector('.stgt-session-trigger')?.dataset.session===${JSON.stringify(originalSessionId)}`);
+    await wait("document.body.textContent.includes('STG会话切换旧历史')", 15000);
+    await openSwitcher();
+    const listedBefore = await listedSessions();
+    const openBefore = await currentSession();
+    const victim = listedBefore.find(id => id !== openBefore);
+    assert.ok(victim, 'a second conversation must exist before testing the archive');
+    const draftBefore = await js(composerText);
+    assert.match(draftBefore, /原来的草稿别丢/, 'the fixture must carry the draft it is about to protect');
+    // Cancel first: nothing may leave the list and no Host call may happen.
+    await js(`[...document.querySelectorAll('.stgt-session-row')].find(r=>r.querySelector('[data-session-id]')?.dataset.sessionId===${JSON.stringify(victim)}).querySelector('.stgt-session-remove').click()`);
+    await wait("!!document.querySelector('.stga-dialog')");
+    // The wording must not promise a permanent delete; it explains that the
+    // transcript is kept and the Host offers no irreversible delete at all.
+    const dialogText = await js("document.querySelector('.stga-dialog').textContent");
+    assert.equal(/已永久删除|永久删除成功|无法恢复/.test(dialogText), false, 'the dialog must not claim a permanent, unrecoverable delete');
+    assert.match(dialogText, /保留/, 'the dialog must say the conversation is kept');
+    assert.match(dialogText, /恢复/, 'the dialog must point at restoring it');
+    await js("[...document.querySelectorAll('.stga-dialog button')].find(e=>e.textContent.trim()==='取消').click()");
+    await wait("!document.querySelector('.stga-dialog')");
+    assert.equal(await js("document.querySelector('.stga-dialog')"), null);
+    await openSwitcher();
+    assert.deepEqual([...(await listedSessions())].sort(), [...listedBefore].sort(), 'cancelling must leave every conversation listed');
+    checks.push('the archive confirmation cancels without removing or archiving anything');
+
+    // Confirm: only the named conversation leaves the live list.
+    await js(`[...document.querySelectorAll('.stgt-session-row')].find(r=>r.querySelector('[data-session-id]')?.dataset.sessionId===${JSON.stringify(victim)}).querySelector('.stgt-session-remove').click()`);
+    await wait("!!document.querySelector('.stga-dialog')");
+    await js("[...document.querySelectorAll('.stga-dialog button')].find(e=>e.textContent.trim()==='移出对话').click()");
+    await wait("!document.querySelector('.stga-dialog')");
+    await new Promise(resolve => setTimeout(resolve, 600));
+    // Removing somebody else must not close, switch or empty the open panel.
+    assert.equal(await js("!!document.querySelector('.stgt-teacher')"), true, 'the open teacher panel must survive archiving another conversation');
+    assert.equal(await currentSession(), openBefore, 'archiving another conversation must not change the open one');
+    assert.equal(await js(composerText), draftBefore, 'the open draft must survive archiving another conversation');
+    assert.equal(await js("document.body.textContent.includes('STG会话切换旧历史')"), true, 'the open history must survive');
+    await openSwitcher();
+    const listedAfterArchive = await listedSessions();
+    assert.equal(listedAfterArchive.includes(victim), false, 'the archived conversation must leave the live list');
+    assert.equal(listedAfterArchive.includes(openBefore), true, 'archiving one conversation must not disturb the other');
+    assert.equal(await js("document.querySelector('.stgt-session-menu').textContent.includes('已移出')"), true);
+    checks.push('confirming archives exactly one other conversation, leaving the open one, its history and its draft intact');
+
+    // Restore it from the "已移出" shelf; the same Session comes back.
+    await js("[...document.querySelectorAll('.stgt-session-archived-toggle')][0].click()");
+    await wait("!!document.querySelector('.stgt-session-restore')");
+    assert.equal(await js("document.querySelectorAll('.stgt-session-restore').length>0"), true);
+    await js("document.querySelector('.stgt-session-restore').click()");
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await openSwitcher();
+    const listedAfterRestore = await listedSessions();
+    assert.equal(listedAfterRestore.includes(victim), true, 'restoring must put the same conversation back in the live list');
+    checks.push('the same conversation returns to the live list through the recoverable archive');
+    await closeSwitcher();
+    await shot('teacher-session-archive');
     assert.deepEqual(errors, [], 'Native browser logged errors');
     result = { originalSessionId, newSessionId, finalSessionId: await currentSession() };
     ok = true;

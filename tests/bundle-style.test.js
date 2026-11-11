@@ -5,6 +5,9 @@ import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { workbenchCSS } from '../src/workbench/style.js';
 import { experienceCSS } from '../src/workbench/experience-style.js';
+import { css as panelCSS } from '../src/style.js';
+
+const bundleText = () => fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
 
 test('distributed native bundle mounts and cleans up the editor CSS before applying the client', () => {
   let registration;
@@ -47,4 +50,30 @@ test('reader tokens paint a warm paper column on the neutral canvas instead of a
   assert.match(workbenchCSS, /\.stgw-markdown h2\{font-size:24px;[^}]*font-weight:600/);
   assert.match(workbenchCSS, /\.stgw-markdown pre\{[^}]*font-size:14px;line-height:1\.75/);
   assert.match(workbenchCSS, /\.stgw-scroll\{[^}]*background:var\(--stgw-canvas\)/);
+});
+
+test('the archive confirmation ships its own rules wherever it can be opened', () => {
+  // A dialog that renders unstyled is a functional defect, not a cosmetic one.
+  // Both surfaces live in the distributed bundle, so assert on the shipped file
+  // rather than on the source module: the regression was a missing injection.
+  const bundle = bundleText();
+  const rules = css => [...bundle.matchAll(new RegExp(css, 'g'))].length;
+  assert.ok(rules('\\.stga-backdrop\\{position:absolute') > 0, 'the dialog backdrop rule must ship');
+  assert.ok(rules('\\.stga-dialog\\{') > 0, 'the dialog box rule must ship');
+  assert.ok(rules('\\.stga-actions button\\.stga-confirm\\{') > 0, 'the confirm button rule must ship');
+  // The teacher surface combines its two stylesheets at apply time; assert both
+  // the rule text and the concatenation that puts them in one <style> element.
+  assert.match(bundle, /NATIVE_CSS|stg-learning-native/);
+  assert.ok(bundle.includes('stga-backdrop'), 'the dialog CSS must reach the bundle');
+});
+
+test('the session manager paints its recoverable archive shelf', () => {
+  // "移出" must never read as a permanent delete: the page shows the archived
+  // set and a restore action right beneath the live list.
+  assert.match(panelCSS, /\.stgl-page button\.stgl-archive\{/);
+  assert.match(panelCSS, /\.stgl-archived-toggle\{/);
+  assert.match(panelCSS, /\.stgl-archived-list li>button\{/);
+  assert.match(panelCSS, /\.stgl-notice-error\{/);
+  const bundle = bundleText();
+  assert.ok(bundle.includes('stgl-archived-list'), 'the archive shelf must be part of the built client');
 });

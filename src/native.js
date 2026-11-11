@@ -9,8 +9,9 @@ import { maskTeachingVisualText } from './teaching-visual.js';
 import { createMentorDraftMailbox } from './mentor-drafts.js';
 import { createLearningEntryPolicy } from './learning-layout.js';
 import { buildMentorDraft, createMentorCoordinator, insertMentorDraft } from './native-protocol.js';
-import { createTeacherDraftRegistry, createTeacherSessionSwitcher, teacherSessionRows } from './teacher-sessions.js';
+import { createTeacherArchiveController, createTeacherDraftRegistry, createTeacherSessionSwitcher, teacherSessionRows } from './teacher-sessions.js';
 import { TeacherSessionSwitcher, teacherSessionsCSS } from './workbench/TeacherSessions.jsx';
+import { archiveConfirmCSS } from './workbench/ArchiveConfirm.jsx';
 
 const h = React.createElement, identity = value => value;
 const PANEL = 'stg-learning', LAST_WORKSPACE = 'stg-learning.space.v2';
@@ -199,11 +200,22 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
   const workspaces = useMemo(() => library.map(item => ({ ...workspaceSnapshot.items?.find(row => row.workspaceId === item.workspaceId), ...item })), [library, workspaceSnapshot.items]);
   const workspace = workspaces.find(item => item.workspaceId === selected);
   currentWorkspace.current = workspace?.workspaceId || '';
+  // The archive set is registry-global and lives beside (not inside) the
+  // workspace rows, so the lists must depend on it directly: archiving one
+  // conversation has to move that row out of the open list immediately.
+  const archivedKey = (workspaceSnapshot.archivedSessionIds || getArchivedSessionIds() || []).join('\n');
+  const archivedIds = archivedKey ? archivedKey.split('\n') : [];
   const sessionRows = useMemo(() => !workspace ? [] : teacherSessionRows(sessionsSnapshot, workspace, {
-    archivedSessionIds: getArchivedSessionIds(),
+    archivedSessionIds: archivedIds,
     includeSessionIds: [...(createdIds.current.get(workspace.workspaceId) || [])],
     currentSessionId: teacher?.id || '',
-  }), [sessionsSnapshot, workspace, teacher?.id]);
+  }), [sessionsSnapshot, workspace, teacher?.id, archivedKey]);
+  const archivedRows = useMemo(() => !workspace ? [] : teacherSessionRows(sessionsSnapshot, workspace, {
+    archivedSessionIds: archivedIds,
+    includeSessionIds: [...(createdIds.current.get(workspace.workspaceId) || [])],
+    currentSessionId: teacher?.id || '',
+    archivedOnly: true,
+  }), [sessionsSnapshot, workspace, teacher?.id, archivedKey]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; connectionGeneration.current++; switcher.current?.dispose(); for (const reference of retired.current.splice(0)) { try { reference.release(); } catch { /* Already released. */ } } teacherRef.current?.reference.release(); teacherRef.current = null; }; }, []);
   useEffect(() => {
     const abort = new AbortController(); setLoading(true); setLibraryError('');
@@ -216,6 +228,39 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
     teacherRef.current = null; setTeacher(null); setSwitchState({ busy: false, error: '', status: '' });
   }
   function choose(id) { closeTeacher(); setSelected(id); rememberWorkspace(id); setError(''); }
+  /**
+   * Removing one conversation goes through the Host's recoverable archive only:
+   * the transcript and its position stay, and "已移出" restores it. The current
+   * conversation is never left bound to a hidden id: after archiving the
+   * selected one, the panel switches to another listed teacher (or reopens the
+   * guide), while a non-current removal keeps the open conversation untouched.
+   */
+  const archive = useRef(null);
+  // The controller outlives renders, so it must read the newest rows instead of
+  // the [] captured on the very first render.
+  const rowsRef = useRef(sessionRows); rowsRef.current = sessionRows;
+  const [archiveState, setArchiveState] = useState({ request: null, busy: false, error: '', status: '' });
+  if (!archive.current) archive.current = createTeacherArchiveController({
+    /**
+     * The Host hides an archived Session from every surface, and hiding the one
+     * this panel is rendering tears the panel down mid-call, which is how an
+     * archived id stayed wired into the view. The open conversation is released
+     * first and the panel returns to the guide; archiving a conversation that is
+     * not open leaves the panel, its history and its draft untouched.
+     */
+    archiveSession: async request => {
+      const current = teacherRef.current;
+      const archivingCurrent = Boolean(current) && current.id === request.sessionId;
+      const workspaceId = request.workspaceId || current?.workspaceId || currentWorkspace.current;
+      if (archivingCurrent) closeTeacher();
+      return mentorSessions.archive({ ...request, workspaceId, knownSessionIds: rowsRef.current.map(row => row.id) });
+    },
+    restoreSession: request => mentorSessions.restore(request),
+    getWorkspaceId: () => currentWorkspace.current,
+    isLive: target => mounted.current && (!target?.workspaceId || currentWorkspace.current === target.workspaceId),
+    onChange: patch => { if (mounted.current) setArchiveState(current => ({ ...current, ...patch })); },
+    onRestored: () => { if (mounted.current) setRefresh(value => value + 1); },
+  });
   /** The switcher commits only after the retained generation is ready and bound. */
   const switcher = useRef(null);
   if (!switcher.current) switcher.current = createTeacherSessionSwitcher({
@@ -266,6 +311,43 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
       } finally { if (ownsReference) retained?.reference.release(); pending.current = false; if (mounted.current) setBusy(false); }
     });
   }
+  /**
+   * "Start over with a new topic": the old conversation is flushed (its
+   * hand-typed draft stays in its own composer), a distinct Session is created
+   * through the official create/course-binding path, and only then is the new
+   * opening staged for review. Nothing is sent automatically.
+   */
+  async function restart(context = {}) {
+    return exclusive(async () => {
+      if (!workspace) throw Error('学习空间尚未就绪，请重新打开。');
+      if (pending.current) throw Error('导师连接正在处理中，请稍候再试。');
+      pending.current = true; setBusy(true); setError('');
+      const generation = connectionGeneration.current, workspaceId = workspace.workspaceId, courseId = context.course?.id || '_workspace';
+      let retained, ticket;
+      try {
+        // Keep whatever the learner typed in the conversation they are leaving.
+        try { if (teacherRef.current?.id) draftRegistry.persist(teacherRef.current.id); } catch { /* The conversation itself is untouched. */ }
+        retained = await mentorSessions.createNew({ workspaceId, courseId });
+        if (!mounted.current || generation !== connectionGeneration.current || currentWorkspace.current !== workspaceId) {
+          retained.reference?.release?.();
+          throw Error('学习位置已经改变，请在当前课程重新开始。');
+        }
+        ticket = mailbox.enqueue(retained.id, buildMentorDraft(context), { intent: 'initialize' });
+        ticket.ready.catch(() => {});
+        closeTeacher();
+        await openSession(retained.id);
+        await ticket.ready;
+        return retained.id;
+      } catch (failure) {
+        if (ticket && retained) mailbox.fail(retained.id, ticket.id, failure);
+        if (mounted.current) setError(failure.message || '无法新建导师对话，请重试。');
+        throw failure;
+      } finally {
+        try { retained?.reference?.release?.(); } catch { /* Already handed off to the main conversation. */ }
+        pending.current = false; if (mounted.current) setBusy(false);
+      }
+    });
+  }
   if (workspaceSnapshot.phase !== 'ready') return h('div', { className: 'stgw-native-status', role: 'status' }, '正在读取学习空间…');
   if (!workspace) return h(LearningLibrary, { api, items: library, loading, error: libraryError, onReload: () => setRefresh(value => value + 1), onOpen: choose, onReady: item => { setLibrary(previous => [...previous.filter(row => row.workspaceId !== item.workspaceId), item]); choose(item.workspaceId); setRefresh(value => value + 1); try { storage()?.setItem(paneKey(item.workspaceId), 'conversation'); } catch { /* UI preference. */ } }, onBack: () => selectPanel(null) });
   const sessionControl = teacher && h(TeacherSessionSwitcher, {
@@ -273,10 +355,15 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
     // Keep the error inside the menu so the visible conversation never loses
     // its place, but surface it through the panel when the menu is closed.
     error: switchState.error, status: switchState.status,
+    archivedSessions: archivedRows, archiveRequest: archiveState.request, archiveBusy: archiveState.busy, archiveError: archiveState.error,
     onSelect: id => { void switcher.current.select(id); },
     onNew: () => { void switcher.current.create(); },
+    onArchive: row => archive.current.ask(row),
+    onArchiveConfirm: () => { void archive.current.confirm(); },
+    onArchiveCancel: () => archive.current.cancel(),
+    onRestore: row => { void archive.current.restore(row); },
   });
-  return h('div', { className: 'stgw-native' }, h(TeacherFrame, { open: !!teacher, onClose: closeTeacher, onExpand: () => teacher && openSession(teacher.id), error: error || switchState.error, notice: switchState.status && !switchState.busy ? switchState.status : '', sessionControl, teacher: teacher && h(SessionProvider, { session: teacher.reference }, renderSlot('stg.learning.teacher', {})) }, h(LearningJourney, { key: workspace.workspaceId, api, workspace, workspaces, mentor: { visible: !!teacher, busy, error, onAsk: context => connect(context, { stage: true, inline: !['initialize', 'assess'].includes(context.intent) }), onConnect: context => connect(context) }, onOpenLibrary: () => choose(''), onBack: () => selectPanel(null), onManageSessions, onOpenSession: context => connect(context), renderDocumentEditor })));
+  return h('div', { className: 'stgw-native' }, h(TeacherFrame, { open: !!teacher, onClose: closeTeacher, onExpand: () => teacher && openSession(teacher.id), error: error || switchState.error, notice: switchState.status && !switchState.busy ? switchState.status : '', sessionControl, teacher: teacher && h(SessionProvider, { session: teacher.reference }, renderSlot('stg.learning.teacher', {})) }, h(LearningJourney, { key: workspace.workspaceId, api, workspace, workspaces, mentor: { visible: !!teacher, busy, error, isSavedAvailable: id => sessionRows.some(row => row.id === id), onAsk: context => connect(context, { stage: true, inline: !['initialize', 'assess'].includes(context.intent) }), onConnect: context => connect(context), onContinue: context => connect(context), onRestart: context => restart(context) }, onOpenLibrary: () => choose(''), onBack: () => selectPanel(null), onManageSessions, onOpenSession: context => connect(context), renderDocumentEditor })));
 }
 
 export function applyNative(ctx, { renderDocumentEditor, onManageSessions } = {}) {
@@ -292,11 +379,26 @@ export function applyNative(ctx, { renderDocumentEditor, onManageSessions } = {}
       return result.value.sessionId;
     },
     retain: id => ctx.sessions.retain(id, { source: 'stgLearning' }),
+    // The Host's controller resolves `undefined` on success and throws a typed
+    // error on refusal, so the call is wrapped and never read for a value.
+    archive: async sessionId => { await ctx.workspaces.archiveSession(sessionId); },
+    unarchive: async sessionId => { await ctx.workspaces.unarchiveSession(sessionId); },
+    getArchivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds || [],
   });
-  ctx.effect(() => { const style = document.createElement('style'); style.dataset.plugin = 'stg-learning-native'; style.textContent = NATIVE_CSS + teacherSessionsCSS; document.head.append(style); return () => { mailbox.dispose(); style.remove(); }; }, 'stg-learning: native full conversation handoff');
-  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL, children: { 'stg.learning.teacher': { kind: 'single', scope: 'session' } }, inject: () => ({ api, mailbox, draftRegistry, mentorSessions: { acquire: request => coordinator.acquire(request), select: request => coordinator.select(request), createNew: request => coordinator.createNew(request) }, sessionsList: ctx.sessions.list, getArchivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds || [], openSession: id => ctx.uiWorkspace.openSession(id), selectPanel: id => ctx.layout.selectPanel(id), renderDocumentEditor, onManageSessions: onManageSessions || (() => ctx.layout.selectPanel('stg-learning-sessions')) }) }, NativeWorkbench));
+  // The switcher renders the confirmation dialog, so the dialog's own rules must
+  // ship with the switcher: `teacherSessionsCSS` only overrides where it covers.
+  ctx.effect(() => { const style = document.createElement('style'); style.dataset.plugin = 'stg-learning-native'; style.textContent = NATIVE_CSS + teacherSessionsCSS + archiveConfirmCSS; document.head.append(style); return () => { mailbox.dispose(); style.remove(); }; }, 'stg-learning: native full conversation handoff');
+  ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL, children: { 'stg.learning.teacher': { kind: 'single', scope: 'session' } }, inject: () => ({ api, mailbox, draftRegistry, mentorSessions: { acquire: request => coordinator.acquire(request), select: request => coordinator.select(request), createNew: request => coordinator.createNew(request), archive: request => coordinator.archiveSession(request), restore: request => coordinator.unarchiveSession(request) }, sessionsList: ctx.sessions.list, getArchivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds || [], openSession: id => ctx.uiWorkspace.openSession(id), selectPanel: id => ctx.layout.selectPanel(id), renderDocumentEditor, onManageSessions: onManageSessions || (() => ctx.layout.selectPanel('stg-learning-sessions')) }) }, NativeWorkbench));
   ctx.slots.inject('stg.learning.teacher', () => ctx.slots.register({ name: 'stg.learning.teacher', inject: () => ({ mailbox, draftRegistry }) }, TeacherConversation));
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'stg-learning-return', order: 20, inject: () => ({ api, mailbox, getSessionSummary: id => ctx.sessions.list.getSnapshot().byId[id], onOpenLearning: id => { rememberWorkspace(id); try { storage()?.setItem(paneKey(id), 'documents'); } catch { /* UI preference only. */ } ctx.layout.selectPanel(PANEL); } }) }, NativeLearningAction));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL, order: 35, label: () => '学习' }, BookIcon));
   ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'stg-learning-sidebar-policy', inject: () => ({ enterPolicy, toggleSidebar: () => ctx.layout.toggleSidebar() }) }, LearningSidebarPolicy));
+  // The session manager page is a second surface over the same teacher list, so
+  // it must reuse this coordinator instead of calling the Host archive directly;
+  // that keeps one definition of "belongs to this space" for both entry points.
+  return {
+    archive: request => coordinator.archiveSession(request),
+    restore: request => coordinator.unarchiveSession(request),
+    getArchivedSessionIds: () => ctx.workspaces.list.getSnapshot().archivedSessionIds || [],
+  };
 }

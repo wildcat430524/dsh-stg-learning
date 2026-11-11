@@ -2,7 +2,7 @@
 
 在 DeepSeek Harness 内继续你的 StepsToGreat 学习：读教学、写答案、核对历轮反馈，再用原生导师会话评估与讨论。
 
-**v0.5.16 · 已在 DSH 0.2.2-rc.1 验收 · 本地 Markdown · MIT**
+**v0.5.17 · 已在 DSH 0.2.2-rc.1 验收 · 本地 Markdown · MIT**
 
 [下载最新版插件](https://github.com/wildcat430524/dsh-stg-learning/releases/latest) · [下载 STG Desk](https://github.com/wildcat430524/STG-Desk/releases/latest) · [下载 StepsToGreat ZIP](https://github.com/wildcat430524/StepsToGreat/archive/refs/heads/main.zip)
 
@@ -18,6 +18,8 @@
 - “新学习”进入独立页面，仅填一个名称，再通过系统窗口选择父目录；新建独立文件夹，校验并复制完整同源框架、空白档案和规则。同名文件夹绝不覆盖。
 - “导入已有”选择学习文件夹根目录；识别有效 StepsToGreat 项目后登记或复用，不复制、不覆盖。普通代码仓库不会混入学习列表。旧版目录可使用指向同一工作区内部的档案符号链接与课程 junction，无需迁移或复制。
 - 打开已有学习空间后进入档案记录的当前课程和轮次。可通过顶部课程菜单搜索和切换课程。
+- 新学习空间按你填写的主题、基础或具体任务开始。返回后可继续原对话，也可以改主题另开对话。
+- 导师菜单和「学习会话」支持移出选中的对话，并从「已移出」恢复。
 - 顶部左侧的轮次选择适用于教学引导、阅读、作答和复习。历史轮次可查看对应的原题、已保存作答和导师反馈，切回当前轮可继续草稿。
 - 在当前轮填写 1–3 道题，保存时追加原答；保留旧作答、导师评估和正确答案栏目。
 - 阅读区支持公式、代码、表格、图片；完整文档可用 STG Desk 同源的所见即所得编辑器，或 Markdown 源文编辑。
@@ -31,7 +33,7 @@
 
 ## 安装与开始
 
-1. 从 [GitHub Releases](https://github.com/wildcat430524/dsh-stg-learning/releases/latest) 下载 `dsh-stg-learning-0.5.16.tgz`。
+1. 从 [GitHub Releases](https://github.com/wildcat430524/dsh-stg-learning/releases/latest) 下载 `dsh-stg-learning-0.5.17.tgz`。
 2. 在 **DSH 0.2.2-rc.1** 的插件管理页面安装并启用。若显示 `restart-required`，保存当前工作后重启宿主。
 3. 点击左侧“学习”。选择“新学习”创建全新的文件夹并初始化；或“导入已有 StepsToGreat 文件夹”，选择包含学习档案和协议/初始化标记的根目录。
 4. 尚无课程时，进入学习初始化页，选择自然开始或 grill-me 式澄清，点击“打开导师，准备开场”，在完整原生输入框核对后发送；导师按目标交流 → 摸底 → 学习路线 → 第一课构建个性化学习。初始化本身不臆造课程或掌握记录。
@@ -40,10 +42,10 @@
 命令行安装是备用入口，请明确使用与桌面端相同版本的 DSH 和目标 profile：
 
 ```text
-dsh plugin --profile desktop add /absolute/path/dsh-stg-learning-0.5.16.tgz
+dsh plugin --profile desktop add /absolute/path/dsh-stg-learning-0.5.17.tgz
 ```
 
-使用 CLI 安装前，核对其版本和目标 profile。包的 `engines.dsh` 声明兼容的宿主版本，0.5.16 的本轮宿主验收使用 DSH 0.2.2-rc.1。
+使用 CLI 安装前，核对其版本和目标 profile。包的 `engines.dsh` 声明兼容的宿主版本，0.5.17 的本轮宿主验收使用 DSH 0.2.2-rc.1。
 
 ## 与现有生态协作
 

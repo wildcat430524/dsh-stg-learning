@@ -305,6 +305,7 @@ function sortRows(rows) {
  * @param {string} [options.workspaceId] - owning Workspace; unknown ids yield `[]`.
  * @param {{sessions?: unknown}} [options.metadata] - `normalizeMetadata` output.
  * @param {string} [options.query] - optional case-insensitive title/course filter.
+ * @param {boolean} [options.archivedOnly] - list the archived set instead of the live one.
  * @returns {Array<{id: string, title: string, cwd: string|undefined, updatedAt: number|undefined, course: string, stage: string, pinned: boolean, current: boolean}>} display rows.
  */
 export function currentSessionId(snapshot) {
@@ -321,6 +322,7 @@ export function currentSessionId(snapshot) {
 
 export function learningSessions(options) {
   const request = isRecord(options) ? options : {};
+  const archivedOnly = readField(request, 'archivedOnly') === true;
 
   const sessionSnapshotValue = readField(request, 'sessions');
   const sessionSnapshot = isRecord(sessionSnapshotValue) ? sessionSnapshotValue : {};
@@ -376,7 +378,8 @@ export function learningSessions(options) {
 
     // A subagent row belongs to its parent's catalog; archived rows are visible nowhere.
     if (readField(summary, 'origin') === 'subagent') continue;
-    if (archived.has(id)) continue;
+    // The "已移出" view shows exactly the archived set and nothing else.
+    if (archived.has(id) !== archivedOnly) continue;
 
     const cwd = textOrUndefined(readField(summary, 'cwd'));
     if (cwd !== undefined && workspacePath.trim() !== '' && !samePath(cwd, workspacePath)) continue;

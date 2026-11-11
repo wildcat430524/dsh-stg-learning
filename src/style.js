@@ -10,4 +10,20 @@ export const css = `
 .stgl-download{display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none;border:1px solid var(--stgl-line);border-radius:11px;background:var(--stgl-panel);padding:9px 12px;font-size:12px;font-weight:500;color:var(--stgl-ink)}.stgl-download:hover{background:var(--stgl-soft)}.stgl-heading-actions{flex-wrap:wrap}.stgl-page a:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary,#4176e6));outline-offset:2px}@media(max-width:780px){.stgl-page{padding:22px}.stgl-workspace-label{max-width:100%;flex:1}.stgl-workspace{width:100%;max-width:none}.stgl-search{flex-basis:100%;order:3}.stgl-heading-actions{gap:5px}.stgl-heading-actions button{font-size:11px;padding:8px}.stgl-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr))}}
 @media(max-width:480px){.stgl-page{padding:16px}.stgl-heading{align-items:flex-start;flex-direction:column;gap:12px}.stgl-heading h1{font-size:24px}.stgl-heading-actions{align-self:flex-end}.stgl-filterbar{align-items:flex-start;flex-wrap:wrap}.stgl-tabs button{padding:6px 8px}.stgl-count>span{display:none}.stgl-controls{padding:12px}.stgl-grid{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.stgl-page button,.stgl-card{transition:none}.stgl-page button:is(:hover,:active){transform:none!important}}
+/* The "已移出" shelf: the recoverable archive must be visible on this page, so
+   moving a conversation out never looks like an irreversible deletion. */
+.stgl-notice-error{color:var(--dsw-alias-state-error-primary,#b44);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#b44) 26%,var(--stgl-panel))}
+.stgl-card-actions{display:flex;align-items:center;gap:2px;flex-shrink:0}
+.stgl-page button.stgl-archive{display:grid;place-items:center;width:28px;height:28px;padding:0;border-color:transparent;background:transparent;color:var(--stgl-muted);border-radius:8px;opacity:.72}
+.stgl-page button.stgl-archive:hover:not(:disabled),.stgl-page button.stgl-archive:focus-visible{opacity:1;color:var(--dsw-alias-state-error-primary,#b44);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#b44) 8%,var(--stgl-panel))}
+.stgl-archived{margin:22px 0 6px;border-top:1px solid var(--stgl-line);padding-top:14px}
+.stgl-archived-toggle{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;width:auto;min-height:28px;padding:5px 8px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--stgl-ink);font:inherit;font-size:12px;font-weight:500;cursor:pointer;text-align:left}
+.stgl-archived-toggle>span{font-size:11px;font-weight:400;color:var(--stgl-muted)}
+.stgl-archived-toggle:hover{background:var(--stgl-soft)}
+.stgl-archived-empty{margin:10px 0 0;font-size:11px;color:var(--stgl-muted)}
+.stgl-archived-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.stgl-archived-list li{display:flex;align-items:center;gap:12px;padding:8px 11px;border:1px solid var(--stgl-line);border-radius:10px;background:var(--stgl-panel);font-size:12px}
+.stgl-archived-list li>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--stgl-muted)}
+.stgl-archived-list li>button{width:auto;flex:none;min-height:26px;padding:3px 10px;border:1px solid var(--stgl-line);border-radius:7px;background:transparent;color:var(--stgl-ink);font:inherit;font-size:11px;cursor:pointer}
+.stgl-archived-list li>button:hover:not(:disabled){border-color:var(--stgl-ink)}
 `;

@@ -1,21 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMentorCoordinator, isTeacherSession, STG_PRESET } from '../src/native-protocol.js';
-import { createTeacherDraftRegistry, createTeacherSessionSwitcher, teacherSessionLabel, teacherSessionRows, NEW_TEACHER_SESSION_LABEL } from '../src/teacher-sessions.js';
+import { createTeacherArchiveController, createTeacherDraftRegistry, createTeacherSessionSwitcher, teacherSessionLabel, teacherSessionRows, NEW_TEACHER_SESSION_LABEL } from '../src/teacher-sessions.js';
 
 const PRESET = STG_PRESET;
 
 /** A coordinator fixture where every side effect is observable and orderable. */
-function fixture({ state = { revision: 1 }, rows = {}, ids = Object.keys(rows), workspaceSessions, extraWorkspaces = {}, failUpdate, failRetain, retainDelay = 0 } = {}) {
+function fixture({ state = { revision: 1 }, rows = {}, ids = Object.keys(rows), workspaceSessions, extraWorkspaces = {}, failUpdate, failRetain, retainDelay = 0, archived = [], failArchive, archiveSupported = true } = {}) {
   let data = structuredClone(state), creates = 0, retains = 0, releases = 0;
   const members = workspaceSessions ? [...workspaceSessions] : [...ids];
   const workspaces = new Map([['w', { workspaceId: 'w', path: 'E:/lessons', sessionIds: members }], ...Object.entries(extraWorkspaces)]);
   const snapshot = { ids: [...ids], byId: rows };
-  const calls = [];
+  const calls = [], archivedIds = [...archived], archiveCalls = [], restoreCalls = [];
   const coordinator = createMentorCoordinator({
     api: {
       state: async () => structuredClone(data),
-      updateState: async value => { if (failUpdate) await failUpdate(value); data = { ...data, ...value.patch, revision: data.revision + 1 }; calls.push(value); },
+      updateState: async value => {
+        if (failUpdate) await failUpdate(value);
+        // Mirror the Host writer: a courseSessions patch merges, and a null value
+        // deletes just that one mapping.
+        const patch = value.patch?.courseSessions
+          ? { ...value.patch, courseSessions: { ...(data.courseSessions || {}) } }
+          : value.patch;
+        if (value.patch?.courseSessions) for (const [courseId, sessionId] of Object.entries(value.patch.courseSessions)) {
+          if (sessionId === null) delete patch.courseSessions[courseId]; else patch.courseSessions[courseId] = sessionId;
+        }
+        data = { ...data, ...patch, revision: data.revision + 1 }; calls.push(value);
+      },
     },
     getWorkspace: id => workspaces.get(id) || null,
     getSessions: () => snapshot,
@@ -35,8 +46,16 @@ function fixture({ state = { revision: 1 }, rows = {}, ids = Object.keys(rows), 
         release: () => { releases++; },
       };
     },
+    ...(archiveSupported ? {
+      archive: async id => { archiveCalls.push(id); if (failArchive) await failArchive(id); if (!snapshot.byId[id]) throw Object.assign(Error('missing'), { rpcError: { code: 'session/not-found', message: 'missing' } }); archivedIds.push(id); },
+      unarchive: async id => { restoreCalls.push(id); const at = archivedIds.indexOf(id); if (at >= 0) archivedIds.splice(at, 1); },
+    } : {}),
+    getArchivedSessionIds: () => archivedIds,
   });
-  return { coordinator, calls, snapshot, workspaces, counts: () => ({ creates, retains, releases }), state: () => data };
+  return {
+    coordinator, calls, snapshot, workspaces, archivedIds, archiveCalls, restoreCalls,
+    counts: () => ({ creates, retains, releases }), state: () => data,
+  };
 }
 
 const row = (id, patch = {}) => ({ id, blank: false, title: `对话 ${id}`, updatedAt: 1, projectionValues: { agentPreset: PRESET }, ...patch });
@@ -319,4 +338,203 @@ test('the switcher coalesces rapid picks and releases a superseded result', asyn
   await pendingSwap.catch(() => {});
   assert.equal(current.id, 'c');
   assert.ok(released.includes('d'));
+});
+
+test('archiving one conversation uses the recoverable Host archive and unbinds only that id', async () => {
+  const { coordinator, archiveCalls, archivedIds, state } = fixture({ rows: { a: row('a'), b: row('b') }, state: { revision: 3, courseSessions: { math: 'a', english: 'b', _workspace: 'a' } } });
+  const result = await coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' });
+  assert.deepEqual(archiveCalls, ['a']);
+  assert.deepEqual(archivedIds, ['a']);
+  assert.deepEqual(result, { id: 'a', archived: true, workspaceId: 'w' });
+  assert.equal(state().courseSessions.math, undefined);
+  assert.equal(state().courseSessions._workspace, undefined);
+  assert.equal(state().courseSessions.english, 'b', 'another course keeps its own conversation');
+  // Archiving is a rename of the list position, never a transcript delete.
+  assert.ok('a' in fixture({ rows: { a: row('a') } }).snapshot.byId);
+});
+
+test('a foreign, unknown or already-archived id is refused before the Host is called', async () => {
+  const { coordinator, archiveCalls } = fixture({ rows: { a: row('a'), foreign: row('foreign') }, workspaceSessions: ['a'], extraWorkspaces: { other: { workspaceId: 'other', path: 'E:/other', sessionIds: ['foreign'] } }, archived: ['gone'] });
+  await assert.rejects(coordinator.archiveSession({ workspaceId: 'w', sessionId: 'foreign' }), /不属于当前学习空间/);
+  await assert.rejects(coordinator.archiveSession({ workspaceId: 'w', sessionId: 'missing' }), /不属于当前学习空间/);
+  await assert.rejects(coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a', knownSessionIds: ['b'] }), /不属于当前学习空间/);
+  assert.deepEqual(archiveCalls, []);
+  // A generic (non-teacher) Session in this space is also refused.
+  const generic = fixture({ rows: { g: row('g', { projectionValues: { agentPreset: 'standard' } }) } });
+  await assert.rejects(generic.coordinator.archiveSession({ workspaceId: 'w', sessionId: 'g' }), /不属于当前学习空间/);
+  assert.deepEqual(generic.archiveCalls, []);
+});
+
+test('archiving a conversation that is still answering reports the Host refusal and changes nothing', async () => {
+  const { coordinator, archiveCalls, state } = fixture({
+    rows: { a: row('a') }, state: { revision: 2, courseSessions: { math: 'a' } },
+    failArchive: () => { throw Object.assign(Error('workspace session archive failed: workspace/session-active: busy'), { rpcError: { code: 'workspace/session-active', message: 'busy' } }); },
+  });
+  await assert.rejects(coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' }), /session-active/);
+  assert.deepEqual(archiveCalls, ['a']);
+  assert.equal(state().courseSessions.math, 'a', 'a refused archive keeps the course binding');
+});
+
+test('a failed local unbind reports the archive as done instead of pretending nothing happened', async () => {
+  const { coordinator, archivedIds } = fixture({
+    rows: { a: row('a') }, state: { revision: 2, courseSessions: { math: 'a' } },
+    failUpdate: () => { throw Error('disk full'); },
+  });
+  const failure = await coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' }).then(() => null, error => error);
+  assert.equal(failure?.code, 'BINDING_STALE');
+  assert.equal(failure?.archived, true);
+  assert.deepEqual(archivedIds, ['a']);
+});
+
+test('a repeated archive click joins the in-flight call instead of archiving twice', async () => {
+  let release;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const { coordinator, archiveCalls } = fixture({ rows: { a: row('a') }, failArchive: () => blocked });
+  const first = coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' });
+  const second = coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' });
+  assert.equal(first, second);
+  release();
+  await first.catch(() => {});
+  assert.deepEqual(archiveCalls, ['a']);
+});
+
+test('an archived conversation cannot be reacquired or selected until it is restored', async () => {
+  const f = fixture({ rows: { a: row('a') }, state: { revision: 1, courseSessions: { _workspace: 'a' } } });
+  const { coordinator, archivedIds, restoreCalls, archiveCalls } = f;
+  await coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' });
+  assert.deepEqual(archiveCalls, ['a']);
+  await assert.rejects(coordinator.select({ workspaceId: 'w', courseId: 'math', sessionId: 'a' }), /已经移出列表/);
+  await assert.rejects(coordinator.acquire({ workspaceId: 'w', courseId: 'math', sessionId: 'a' }), /已经移出列表/);
+  // An implicit acquire must not reopen the hidden conversation either: the
+  // stale binding was unbound, so it mints a fresh blank one instead.
+  const acquired = await coordinator.acquire({ workspaceId: 'w', courseId: 'math' });
+  assert.notEqual(acquired.id, 'a');
+  assert.equal(f.snapshot.byId[acquired.id].blank, true);
+  const restored = await coordinator.unarchiveSession({ workspaceId: 'w', sessionId: 'a' });
+  assert.deepEqual(restored, { id: 'a', archived: false, workspaceId: 'w' });
+  assert.deepEqual(restoreCalls, ['a']);
+  assert.deepEqual(archivedIds, []);
+  assert.equal((await coordinator.select({ workspaceId: 'w', courseId: 'math', sessionId: 'a' })).id, 'a');
+});
+
+test('restore is coalesced for a repeated click and reports a Host without unarchive', async () => {
+  const { coordinator, restoreCalls } = fixture({ rows: { a: row('a') }, archived: ['a'] });
+  const a = coordinator.unarchiveSession({ workspaceId: 'w', sessionId: 'a' });
+  const b = coordinator.unarchiveSession({ workspaceId: 'w', sessionId: 'a' });
+  assert.equal(a, b);
+  await a;
+  assert.deepEqual(restoreCalls, ['a']);
+  const host = fixture({ rows: { a: row('a') }, archived: ['a'], archiveSupported: false });
+  const failure = await host.coordinator.unarchiveSession({ workspaceId: 'w', sessionId: 'a' }).then(() => null, error => error);
+  assert.equal(failure?.code, 'ARCHIVE_UNAVAILABLE');
+});
+
+test('a Host without an archive method fails honestly instead of faking a removal', async () => {
+  const { coordinator, archiveCalls, state } = fixture({ rows: { a: row('a') }, state: { revision: 1, courseSessions: { math: 'a' } }, archiveSupported: false });
+  const failure = await coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a' }).then(() => null, error => error);
+  assert.equal(failure?.code, 'ARCHIVE_UNAVAILABLE');
+  assert.deepEqual(archiveCalls, []);
+  assert.equal(state().courseSessions.math, 'a');
+});
+
+test('the switcher keeps a non-current conversation and its draft untouched while another is archived', async () => {
+  let current = { id: 'b', workspaceId: 'w', courseId: 'c' }, flushed = [];
+  const switcher = createTeacherSessionSwitcher({
+    getTarget: () => ({ workspaceId: 'w', courseId: 'c' }),
+    getCurrent: () => current, isBlank: () => false, hasDraft: id => id === 'b', flush: id => flushed.push(id),
+    applySession: next => { current = next; },
+  });
+  const { coordinator } = fixture({ rows: { a: row('a'), b: row('b') }, state: { revision: 1, courseSessions: { c: 'b' } } });
+  await coordinator.archiveSession({ workspaceId: 'w', sessionId: 'a', knownSessionIds: ['a', 'b'] });
+  assert.equal(current.id, 'b');
+  assert.deepEqual(flushed, []);
+  assert.equal(coordinator, coordinator);
+});
+
+test('the archive confirmation requires an explicit confirm and cancel never calls the Host', async () => {
+  let archived = 0, changes = [];
+  const controller = createTeacherArchiveController({
+    archiveSession: async () => { archived++; },
+    getWorkspaceId: () => 'w',
+    onChange: patch => changes.push(patch),
+  });
+  assert.equal(await controller.confirm(), false, 'nothing happens without a request');
+  controller.ask({ id: 'a', label: '分数怎么通分' });
+  assert.equal(controller.request.label, '分数怎么通分');
+  controller.cancel();
+  assert.equal(controller.request, null);
+  assert.equal(archived, 0);
+  assert.equal(controller.confirm(), false);
+  controller.ask({ id: 'a', label: '分数怎么通分' });
+  assert.equal(await controller.confirm(), true);
+  assert.equal(archived, 1);
+  assert.equal(changes.at(-1).status, '已移出“分数怎么通分”，可在“已移出”里恢复。');
+});
+
+test('a failed archive keeps the confirmation open and the conversation selectable', async () => {
+  let archived = 0;
+  const controller = createTeacherArchiveController({
+    archiveSession: async () => { archived++; throw Object.assign(Error('x'), { rpcError: { code: 'workspace/session-active', message: 'busy' } }); },
+    getWorkspaceId: () => 'w',
+  });
+  controller.ask({ id: 'a', label: '进行中的对话' });
+  assert.equal(await controller.confirm(), false);
+  assert.equal(archived, 1);
+  assert.equal(controller.request.label, '进行中的对话', 'the target stays named for a retry');
+  assert.match(controller.busy ? '' : 'x', /x/);
+});
+
+test('a repeated confirm click joins the in-flight archive and restores report the same way', async () => {
+  let release, archived = 0, restored = 0;
+  const controller = createTeacherArchiveController({
+    archiveSession: () => { archived++; return new Promise(resolve => { release = resolve; }); },
+    restoreSession: async () => { restored++; },
+    getWorkspaceId: () => 'w',
+  });
+  controller.ask({ id: 'a', label: 'A' });
+  const first = controller.confirm(), second = controller.confirm();
+  assert.equal(first, second);
+  release();
+  await first;
+  assert.equal(archived, 1);
+  assert.equal(await controller.restore({ id: 'b', label: 'B' }), true);
+  assert.equal(restored, 1);
+});
+
+test('archived rows leave the live list and appear only in the archived view', () => {
+  const snapshot = { ids: ['a', 'b'], byId: { a: row('a', { title: '旧对话' }), b: row('b', { title: '现在的对话' }) } };
+  const workspace = { workspaceId: 'w', sessionIds: ['a', 'b'] };
+  assert.deepEqual(teacherSessionRows(snapshot, workspace, { archivedSessionIds: ['a'] }).map(r => r.id), ['b']);
+  const archived = teacherSessionRows(snapshot, workspace, { archivedSessionIds: ['a'], archivedOnly: true });
+  assert.deepEqual(archived.map(r => r.id), ['a']);
+  assert.equal(archived[0].archived, true);
+  assert.equal(archived[0].label, '旧对话');
+});
+
+test('a foreign space conversation never appears in either list', () => {
+  const snapshot = { ids: ['a', 'foreign'], byId: { a: row('a'), foreign: row('foreign', { title: '别的空间' }) } };
+  const workspace = { workspaceId: 'w', sessionIds: ['a'] };
+  assert.deepEqual(teacherSessionRows(snapshot, workspace, { archivedSessionIds: ['foreign'], archivedOnly: true }), []);
+  assert.deepEqual(teacherSessionRows(snapshot, workspace, { archivedSessionIds: ['foreign'] }).map(r => r.id), ['a']);
+});
+
+test('a page listing several spaces resolves the owner of each row before archiving', async () => {
+  // The session manager can show every space at once, so the request must name
+  // the row's own space rather than whichever one the page happens to have
+  // selected; otherwise a row could be handed to the wrong coordinator.
+  const asked = [];
+  const controller = createTeacherArchiveController({
+    archiveSession: async request => { asked.push(request); },
+    restoreSession: async request => { asked.push({ ...request, restored: true }); },
+    getWorkspaceId: row => ({ a: 'space-1', b: 'space-2' })[row?.id] || '',
+  });
+  controller.ask({ id: 'a', label: 'A' });
+  assert.equal(controller.request.workspaceId, 'space-1');
+  controller.cancel();
+  controller.ask({ id: 'b', label: 'B' });
+  assert.equal(controller.request.workspaceId, 'space-2');
+  await controller.confirm();
+  assert.deepEqual(asked, [{ sessionId: 'b', workspaceId: 'space-2' }]);
+  await controller.restore({ id: 'a', label: 'A' });
+  assert.deepEqual(asked.at(-1), { sessionId: 'a', workspaceId: 'space-1', restored: true });
 });

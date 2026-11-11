@@ -1,4 +1,5 @@
 import { STG_PRESET } from './native-protocol.js';
+import { archiveFailureMessage, archiveTitle } from './session-archive.js';
 
 export const NEW_TEACHER_SESSION_LABEL = '新对话';
 export const TEACHER_SESSION_FALLBACK_LABEL = '老师对话';
@@ -38,7 +39,7 @@ function sessionWhen(updatedAt) {
  * arriving. Archived and subagent Sessions never appear, so no other space or
  * child conversation can leak into this picker.
  */
-export function teacherSessionRows(snapshot, workspace, { archivedSessionIds = [], includeSessionIds = [], currentSessionId = '' } = {}) {
+export function teacherSessionRows(snapshot, workspace, { archivedSessionIds = [], includeSessionIds = [], currentSessionId = '', archivedOnly = false } = {}) {
   const byId = snapshot?.byId || {};
   const archived = new Set(Array.isArray(archivedSessionIds) ? archivedSessionIds : []);
   const extra = new Set((Array.isArray(includeSessionIds) ? includeSessionIds : []).filter(id => typeof id === 'string' && id));
@@ -47,8 +48,12 @@ export function teacherSessionRows(snapshot, workspace, { archivedSessionIds = [
   for (const id of members) {
     const row = byId[id];
     const current = id === currentSessionId;
+    // An archived conversation is only listed on the explicit "已移出" surface;
+    // it is still the same space's teacher, never another space's Session.
+    const isArchived = archived.has(id) || Boolean(row?.archived);
+    if (archivedOnly !== isArchived) continue;
     if (row) {
-      if (row.archived || row.parentId || archived.has(id)) continue;
+      if (row.parentId) continue;
       const teacher = row.projectionValues?.agentPreset === STG_PRESET;
       if (!teacher && !extra.has(id) && !current) continue;
     } else if (!extra.has(id)) continue;
@@ -59,6 +64,7 @@ export function teacherSessionRows(snapshot, workspace, { archivedSessionIds = [
       title: cleanTitle(row?.title),
       blank,
       running: Boolean(row?.running),
+      archived: isArchived,
       updatedAt,
       current,
       label: teacherSessionLabel({ id, title: row?.title, blank }),
@@ -290,5 +296,94 @@ export function createTeacherSessionSwitcher({
     dispose() { disposed = true; this.invalidate(); },
     async settled() { if (drainPromise) await drainPromise; },
     get busy() { return busy; },
+  };
+}
+
+/**
+ * Confirm-then-archive for one selected Teacher conversation.
+ *
+ * The confirmation names the exact row title, so a mistyped or repeated click
+ * cannot move another conversation. Nothing is called until `confirm` re-checks
+ * that the same Session is still the confirmed one; a second click while the
+ * request is running joins it instead of archiving twice. A failure keeps the
+ * current conversation, its binding and its draft, and only reports.
+ */
+export function createTeacherArchiveController({
+  archiveSession, restoreSession, onArchived, onRestored, onChange, isLive = () => true, resolveTitle = row => row?.label, getWorkspaceId = () => '',
+} = {}) {
+  let request = null, running = null, busy = false, disposed = false;
+  const report = patch => { if (!disposed) onChange?.({ busy, request, ...patch }); };
+  const fail = (error, fallback) => {
+    busy = false;
+    report({ error: archiveFailureMessage(error) || fallback, status: '' });
+  };
+  return {
+    /** Open the confirmation for a picker row; the title is captured for display. */
+    ask(row) {
+      if (disposed || busy) return;
+      const sessionId = typeof row === 'string' ? row : row?.id;
+      if (!sessionId) { report({ error: '请选择要移出的老师对话。', status: '' }); return; }
+      // A page that can list several Workspaces resolves the owner per row, so
+      // the request always names the space the conversation actually belongs to.
+      const workspaceId = getWorkspaceId?.(row) || '';
+      const label = archiveTitle({ ...row, label: resolveTitle(row) });
+      request = { sessionId, label, workspaceId };
+      report({ error: '', status: '' });
+    },
+    /** Cancel always wins over a pending request; it never touches the Host. */
+    cancel() {
+      if (disposed || busy || !request) return;
+      request = null;
+      report({ error: '', status: '' });
+    },
+    /** The only path that calls the Host. */
+    confirm() {
+      if (disposed) return Promise.resolve(false);
+      if (running) return running;
+      const target = request;
+      if (!target) { report({ error: '请选择要移出的老师对话。', status: '' }); return false; }
+      busy = true; report({ error: '', status: '' });
+      running = (async () => {
+        try {
+          await archiveSession?.({ sessionId: target.sessionId, workspaceId: target.workspaceId });
+          if (disposed || !isLive(target)) return false;
+          request = null; busy = false;
+          report({ error: '', status: `已移出“${target.label}”，可在“已移出”里恢复。` });
+          onArchived?.(target.sessionId);
+          return true;
+        } catch (error) {
+          if (!disposed) fail(error);
+          return false;
+        } finally { running = null; }
+      })();
+      return running;
+    },
+    /** Restore an archived row; failures restore nothing and stay visible. */
+    restore(row) {
+      if (disposed) return Promise.resolve(false);
+      if (running) return running;
+      const sessionId = typeof row === 'string' ? row : row?.id;
+      if (!sessionId) { report({ error: '请选择要恢复的老师对话。', status: '' }); return false; }
+      const workspaceId = getWorkspaceId?.(row) || '';
+      const label = archiveTitle({ ...row, label: resolveTitle(row) });
+      busy = true; report({ error: '', status: '' });
+      running = (async () => {
+        try {
+          await restoreSession?.({ sessionId, workspaceId });
+          if (disposed || !isLive({ workspaceId })) return false;
+          busy = false;
+          report({ error: '', status: `已恢复“${label}”。` });
+          onRestored?.(sessionId);
+          return true;
+        } catch (error) {
+          if (!disposed) fail(error);
+          return false;
+        } finally { running = null; }
+      })();
+      return running;
+    },
+    dispose() { disposed = true; request = null; busy = false; running = null; },
+    get busy() { return busy; },
+    get request() { return request; },
   };
 }

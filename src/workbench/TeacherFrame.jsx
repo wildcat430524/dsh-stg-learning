@@ -133,7 +133,7 @@ export function TeacherFrame({ children, open, teacher, onClose, onExpand, error
   }
 
   function startDrag(event) {
-    if (layout !== 'float' || !wide.current || event.button !== 0 || event.target.closest('button') || event.target.closest('[popover],.stgt-session-menu')) return;
+    if (layout !== 'float' || !wide.current || event.button !== 0 || event.target.closest('button') || event.target.closest('[popover],.stgt-session-menu,.stga-backdrop,.stga-dialog')) return;
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
     resize.current = null; settleForMove(); drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: offset.current };
   }
