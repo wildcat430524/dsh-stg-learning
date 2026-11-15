@@ -52,13 +52,15 @@ export function deriveJourney(overview) {
  */
 export function deriveOpeningPlan({ savedSessionId, savedAvailable = true, brief = '', mode = 'direct' } = {}) {
   const saved = typeof savedSessionId === 'string' && savedSessionId ? savedSessionId : '';
+  const checking = Boolean(saved && savedAvailable === null);
   const usable = Boolean(saved && savedAvailable);
   const hasBrief = typeof brief === 'string' && brief.trim() !== '';
   return {
     savedSessionId: saved,
     canContinue: usable,
+    checking,
     // A stale or archived binding is reported, not silently offered.
-    stale: Boolean(saved && !savedAvailable),
+    stale: Boolean(saved && savedAvailable === false),
     canRestart: true,
     continueHint: SAVED_CONTINUE_HINT,
     restartHint: mode === 'clarify' ? CLARIFY_START_NOTE : hasBrief ? SAVED_RESTART_HINT : SAVED_RESTART_EMPTY,

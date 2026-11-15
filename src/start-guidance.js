@@ -7,13 +7,13 @@
  */
 export const EMPTY_START_BRIEF = '我想开始学习，还没确定具体目标。';
 
-export const DIRECT_START_NOTE = '按你写的直接开始：有问题先解答，有任务先给第一步；需要时才举例，信息不足就只问一个必要的问题。';
+export const DIRECT_START_NOTE = '有问题先解答，有任务先给第一步。';
 export const CLARIFY_START_NOTE = '一次聊一个问题，老师给建议，由你决定。';
 export const EMPTY_DIRECT_NOTE = '还没写主题也没关系，老师会先问一个最要紧的问题。';
-export const SAVED_OPENING_NOTE = '原来的对话和草稿都保留。这里改过的主题只在“用新主题重新开始”时使用。';
+export const SAVED_OPENING_NOTE = '原来的对话和草稿都保留，可在学习会话里找回。';
 export const SAVED_OPENING_DIRTY = '主题已修改：只有“用新主题重新开始”会应用它；“继续原对话”不会改动原来的对话。';
-export const SAVED_OPENING_STALE = '上次保存的对话已不在这个学习空间；打开后会开始一段新的对话。';
-export const SAVED_CONTINUE_HINT = '继续保留原对话和输入内容。';
+export const SAVED_OPENING_STALE = '上次的对话已不在这个学习空间。若你移出了它，可以在「学习会话」里恢复。';
+export const SAVED_CONTINUE_HINT = '上次的消息和未发送草稿都在原对话里。';
 export const SAVED_RESTART_HINT = '新建一段对话，旧对话和草稿都不动。';
 export const SAVED_RESTART_EMPTY = '不写主题也可以：老师会先问一个最要紧的问题，再一起定起点。';
 

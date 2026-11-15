@@ -14,6 +14,7 @@ function readPane(id) { try { return storage()?.getItem(paneKey(id)) === 'docume
 export function LearningJourney({ api, workspace, workspaces, mentor = {}, onOpenLibrary, onBack, onManageSessions, onOpenSession, renderDocumentEditor }) {
   const [pane, setPane] = useState(() => readPane(workspace.workspaceId)), [openedDocuments, setOpenedDocuments] = useState(() => readPane(workspace.workspaceId) === 'documents');
   const [overview, setOverview] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [loadError, setLoadError] = useState(''), [reload, setReload] = useState(0);
   const [setup, setSetup] = useState(() => readSetup(storage(), workspace.workspaceId));
   const mounted = useRef(true);
   const journey = deriveJourney(overview);
@@ -31,13 +32,13 @@ export function LearningJourney({ api, workspace, workspaces, mentor = {}, onOpe
     const refresh = async () => {
       if (pending || abort.signal.aborted) return;
       pending = true;
-      try { const result = await api.workspace({ workspaceId: workspace.workspaceId }, { signal: abort.signal }); if (!abort.signal.aborted) { setOverview(result); setError(''); } }
-      catch (failure) { if (!abort.signal.aborted) setError(failure.message); }
+      try { const result = await api.workspace({ workspaceId: workspace.workspaceId }, { signal: abort.signal }); if (!abort.signal.aborted) { setOverview(result); setLoadError(''); } }
+      catch (failure) { if (!abort.signal.aborted) setLoadError(failure.message); }
       finally { pending = false; if (!abort.signal.aborted) setLoading(false); }
     };
     void refresh(); const timer = setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 15000);
     return () => { abort.abort(); clearInterval(timer); };
-  }, [api, workspace.workspaceId]);
+  }, [api, workspace.workspaceId, reload]);
   function choosePane(next) { if (next === 'documents') setOpenedDocuments(true); setPane(next); try { storage()?.setItem(paneKey(workspace.workspaceId), next); } catch { /* Optional navigation memory. */ } }
   function updateSetup(patch) { const next = normalizeSetup({ ...setup, ...patch }); setSetup(next); saveSetup(storage(), workspace.workspaceId, next); }
   async function ask(request) {
@@ -54,7 +55,7 @@ export function LearningJourney({ api, workspace, workspaces, mentor = {}, onOpe
    */
   async function resumeSaved() {
     setError('');
-    try { await mentor.onContinue?.(journey.context); }
+    try { await mentor.onContinue?.(journey.context, journey.savedSessionId); }
     catch (failure) { if (mounted.current) setError(failure.message); }
   }
   /**
@@ -67,7 +68,18 @@ export function LearningJourney({ api, workspace, workspaces, mentor = {}, onOpe
     try { await mentor.onRestart?.({ ...journey.context, intent: 'initialize', setup }); }
     catch (failure) { if (mounted.current) setError(failure.message); }
   }
-  const plan = deriveOpeningPlan({ savedSessionId: journey.savedSessionId, savedAvailable: journey.savedSessionId ? (mentor.isSavedAvailable?.(journey.savedSessionId) ?? true) : true, brief: setup.brief, mode: setup.mode });
+  const savedAvailable = journey.savedSessionId && mentor.isSavedAvailable ? mentor.isSavedAvailable(journey.savedSessionId) : true;
+  const plan = deriveOpeningPlan({ savedSessionId: journey.savedSessionId, savedAvailable, brief: setup.brief, mode: setup.mode });
+  const opening = journey.phase === 'clarify';
+  const openingFields = <>
+    <label htmlFor="stgj-start-brief">想学的主题或要解决的问题 <small>选填</small></label>
+    <textarea id="stgj-start-brief" value={setup.brief} maxLength={2000} onChange={event => updateSetup({ brief: event.target.value })} placeholder="例如：我想用 Python 处理表格，先学怎么读入数据。"/>
+    <div className="stgj-mode-options" role="group" aria-label="老师怎么帮你">
+      <button aria-pressed={setup.mode === 'direct'} onClick={() => updateSetup({ mode: 'direct' })}>按主题学</button>
+      <button aria-pressed={setup.mode === 'clarify'} onClick={() => updateSetup({ mode: 'clarify' })}>帮我理清目标</button>
+    </div>
+    <p className="stgj-kickoff-note" aria-live="polite">{plan.startNote}</p>
+  </>;
   // The document owns request feedback and retry. Preserve rejection so it
   // cannot clear the selected quote or announce success after a failed handoff.
   const documentsMentor = { visible: !!mentor.visible, busy: mentor.busy, error: mentor.error, onAsk: mentor.onAsk, onToggle: request => { void mentor.onConnect?.(request)?.catch(failure => { if (mounted.current) setError(failure.message); }); } };
@@ -77,27 +89,36 @@ export function LearningJourney({ api, workspace, workspaces, mentor = {}, onOpe
       {!hasCourse && !loading && journey.phase !== 'clarify' && <nav className="stgj-tabs" role="tablist" aria-label="学习主视图"><button role="tab" aria-selected={!showDocuments} aria-controls="stgj-conversation" id="stgj-tab-conversation" onClick={() => choosePane('conversation')}><Icon name="chat" size={14}/>和老师聊聊</button><button role="tab" aria-selected={showDocuments} aria-controls="stgj-documents" id="stgj-tab-documents" onClick={() => choosePane('documents')}><Icon name="file" size={14}/>学习内容</button></nav>}
       <div className="stgj-header-actions">{onManageSessions && <button aria-label="管理学习会话" title="管理学习会话" onClick={onManageSessions}><Icon name="history" size={15}/></button>}{onBack && <button aria-label="返回 DSH 对话" title="返回 DSH 对话" onClick={onBack}><Icon name="arrow" size={15}/></button>}</div>
     </header>
-    {!hasCourse && <div className="stgj-statusline"><i className="stgj-status-dot"/><span>{journey.phaseLabel}</span><span className="stgj-stage-description">先认识你，再决定怎么学</span></div>}
+    {!hasCourse && !opening && <div className="stgj-statusline"><i className="stgj-status-dot"/><span>{journey.phaseLabel}</span></div>}
+    {loadError && <div className="stgj-error" role="alert">{loadError} <button type="button" onClick={() => { setLoadError(''); if (!overview) setLoading(true); setReload(value => value + 1); }}>重试</button></div>}
     {(error || mentor.error) && <div className="stgj-error" role="alert">{error || mentor.error}</div>}
     <div className="stgj-body">
       {!showDocuments && <div id="stgj-conversation" role={journey.phase === 'clarify' ? 'region' : 'tabpanel'} aria-label={journey.phase === 'clarify' ? '开始学习' : undefined} aria-labelledby={journey.phase === 'clarify' ? undefined : 'stgj-tab-conversation'} className="stgj-conversation">
-        {loading ? <div className="stgj-loading" role="status">正在读取学习记录…</div> : <div className="stgj-welcome-scroll"><div className="stgj-welcome"><div className="stgj-eyebrow"><Icon name="chat" size={16}/>{journey.phase === 'clarify' ? '一个轻松的开始' : '从上次的停点继续'}</div><h1>{journey.phase === 'clarify' ? '先聊聊，你想学会什么？' : '你的导师与学习记录，都在这里。'}</h1><p className="stgj-welcome-intro">{journey.phase === 'clarify' ? '说说你想解决的问题，老师会和你一起找到起点。' : '学习记录已保留，回到老师身边，接着上次的思路聊。'}</p>
-          <fieldset className="stgj-kickoff"><legend>{journey.phase === 'clarify' ? '这次，怎么开始' : '继续你的学习'}</legend>
-            {journey.phase === 'clarify' && <><div className="stgj-mode-options" role="group" aria-label="开始方式"><button aria-pressed={setup.mode === 'direct'} onClick={() => updateSetup({ mode: 'direct' })}>直接开始</button><button aria-pressed={setup.mode === 'clarify'} onClick={() => updateSetup({ mode: 'clarify' })}>帮我理清目标</button></div><label htmlFor="stgj-start-brief">你想学的主题，或眼前想解决的一件事 <small>（可以留空）</small></label><textarea id="stgj-start-brief" value={setup.brief} maxLength={2000} onChange={event => updateSetup({ brief: event.target.value })} placeholder="例如：我想用 Python 处理工作表格，但还不知道该从哪里开始。"/><p className="stgj-kickoff-note">{plan.startNote}</p></>}
-            {journey.phase === 'clarify' && plan.stale && <p className="stgj-kickoff-note stgj-kickoff-stale" role="status">{plan.staleNote}</p>}
-            {journey.phase === 'clarify' && plan.canContinue ? <><div className="stgj-saved-choice" role="group" aria-label="继续原对话，或用新主题重新开始">
-              <button className="stgj-primary" disabled={mentor.busy || !overview} onClick={resumeSaved}><Icon name="chat" size={15}/>{mentor.busy ? '正在打开…' : '继续原对话'}<Icon name="arrow" size={14}/></button>
-              <span>{plan.continueHint}</span>
+        {loading || plan.checking ? <div className="stgj-loading" role="status">{loading ? '正在读取学习记录…' : '正在查找上次的对话…'}</div> : overview && <div className="stgj-welcome-scroll"><div className="stgj-welcome">
+          {opening && plan.canContinue ? <>
+            <h1>接着上次学</h1>
+            <p className="stgj-welcome-intro">{plan.continueHint}</p>
+            <div className="stgj-kickoff stgj-resume">
+              <button className="stgj-primary" disabled={mentor.busy} onClick={resumeSaved}><Icon name="chat" size={16}/>{mentor.busy ? '正在打开…' : '继续原对话'}</button>
+              <details className="stgj-restart">
+                <summary>用新主题另开对话</summary>
+                <p className="stgj-restart-note">{plan.openingNote}</p>
+                {openingFields}
+                <div className="stgj-kickoff-actions"><button className="stgj-secondary" disabled={mentor.busy} onClick={restart}>{mentor.busy ? '正在打开…' : '打开新对话'}</button><span>草稿可编辑，由你发送。</span></div>
+              </details>
             </div>
-            <details className="stgj-restart">
-              <summary>用新主题重新开始</summary>
-              <p className="stgj-kickoff-note">{plan.openingNote}</p>
-              <label htmlFor="stgj-new-brief">新的主题，或想先解决的一件事 <small>（可留空，让老师先问）</small></label>
-              <textarea id="stgj-new-brief" value={setup.brief} maxLength={2000} onChange={event => updateSetup({ brief: event.target.value })} placeholder="例如：这次先弄明白分数通分。"/>
-              <div className="stgj-kickoff-actions"><button className="stgj-secondary" disabled={mentor.busy || !overview} onClick={restart}><Icon name="refresh" size={15}/>{mentor.busy ? '正在新建…' : '用这个主题重新开始'}</button><span>{plan.restartHint}</span></div>
-            </details></> : journey.phase === 'clarify' ? <div className="stgj-kickoff-actions"><button className="stgj-primary" disabled={mentor.busy || !overview} onClick={start}><Icon name="chat" size={15}/>{mentor.busy ? '正在连接导师…' : '和老师聊聊'}<Icon name="arrow" size={14}/></button><span>{setup.brief.trim() ? '打开后，由你检查并发送' : '打开后，由你发送第一句话'}</span></div> : null}
-          </fieldset>
-          <p className="stgj-footnote">{journey.savedSessionId ? '还没有课程。先继续和老师聊，第一课准备好后会显示在这里。' : '暂时没有目标也没关系，可以先和老师聊聊。'}</p>
+          </> : opening ? <>
+            <h1>你想学什么？</h1>
+            {plan.stale && <p className="stgj-kickoff-note stgj-kickoff-stale" role="status">{plan.staleNote}</p>}
+            <div className="stgj-kickoff stgj-new-opening">
+              {openingFields}
+              <div className="stgj-kickoff-actions"><button className="stgj-primary" disabled={mentor.busy} onClick={plan.stale ? restart : start}><Icon name="chat" size={16}/>{mentor.busy ? '正在打开…' : plan.stale ? '打开新对话' : '和老师聊聊'}</button><span>草稿可编辑，由你发送。</span></div>
+            </div>
+          </> : <>
+            <h1>继续你的学习</h1>
+            <p className="stgj-welcome-intro">学习记录已保留。</p>
+            <div className="stgj-kickoff"><button className="stgj-primary" disabled={mentor.busy} onClick={start}><Icon name="chat" size={16}/>{mentor.busy ? '正在打开…' : '和老师聊聊'}</button></div>
+          </>}
         </div></div>}
       </div>}
       {(hasCourse || (journey.phase !== 'clarify' && openedDocuments)) && <div className="stgj-documents" id="stgj-documents" role={hasCourse ? undefined : 'tabpanel'} aria-label={hasCourse ? '当前课程' : undefined} aria-labelledby={hasCourse ? undefined : 'stgj-tab-documents'} hidden={!showDocuments}><Workbench api={api} workspaceId={workspace.workspaceId} workspaces={workspaces} embedded mentor={documentsMentor} onOpenSession={onOpenSession} renderDocumentEditor={renderDocumentEditor}/></div>}

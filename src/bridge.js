@@ -1,5 +1,6 @@
 import { createWorkbenchService } from './host/service.js';
 import { createLearningSpacesService } from './host/learning-spaces.js';
+import { VERIFIED_DSH_VERSIONS } from './compat.js';
 
 export const API_BASE = '/api/stg-learning';
 
@@ -58,7 +59,9 @@ export function createWorkbenchHandler(service) {
 }
 
 export function installWorkbenchBridge(ctx) {
-  if (typeof ctx.connection?.fetch?.register !== 'function') throw Error('STG requires a DSH host with Connection authenticated Fetch routes (verified 0.2.1-rc.1 through 0.2.1-rc.5 and 0.2.2-rc.1).');
+  if (typeof ctx.connection?.fetch?.register !== 'function') {
+    throw Error(`STG requires a DSH host with Connection authenticated Fetch routes (verified ${VERIFIED_DSH_VERSIONS.join(', ')}).`);
+  }
   // Reading the picker lazily keeps the workbench available on hosts that
   // never provide one; create/import then fail with a specific diagnostic.
   const pickDirectory = signal => {

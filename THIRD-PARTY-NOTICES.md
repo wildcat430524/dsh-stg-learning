@@ -4,7 +4,7 @@ STG workbench additions are MIT. No SiYuan implementation was copied. StudyMate/
 
 The editor and learning parser snapshots come from STG Desk commit 6b047b17a99d8e467a238b20500698df12d1a5a6 (MIT). See src/editor/stg/PROVENANCE.md and vendor/stg/PROVENANCE.md and their retained LICENSE files.
 
-The packaged teaching Skill comes from Steps2Great-skill commit f8fc81cfd4305da0e627a8a0434c1d153294fc02. Its code and documentation retain their original LICENSE and LICENSE-DOCS in skills/stg-mentor/. See docs/ECOSYSTEM.md for attribution and integration boundaries.
+The packaged teaching Skill comes from Steps2Great-skill commit 46f5da475827522376199873581e430e69bd4df9. Its code and documentation retain their original LICENSE and LICENSE-DOCS in skills/stg-mentor/. See docs/ECOSYSTEM.md for attribution and integration boundaries.
 
 The following packages contribute code, styles or fonts to the browser artifact. Their original notices are preserved in licenses/. DSH runtime packages installed through npm retain their own notices and are not bundled into the client.
 

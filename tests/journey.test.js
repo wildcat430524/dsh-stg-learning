@@ -81,6 +81,12 @@ test('a stale or archived saved binding is reported instead of silently offered'
   // Nothing saved means nothing to report as stale.
   assert.equal(deriveOpeningPlan({ savedSessionId: '' }).stale, false);
 });
+test('the opening waits for the saved Session list before deciding whether to resume', () => {
+  const plan = deriveOpeningPlan({ savedSessionId: 's1', savedAvailable: null });
+  assert.equal(plan.checking, true);
+  assert.equal(plan.canContinue, false);
+  assert.equal(plan.stale, false);
+});
 test('deeper clarification is explicit, bounded by confirmation, and distinct from placement', () => {  const draft = buildMentorDraft({ intent: 'initialize', setup: { mode: 'clarify' } });
   assert.match(draft, /帮我理清目标/); assert.match(draft, /一次聊一个问题/); assert.match(draft, /由我决定/);
   assert.match(STG_PERSONA, /不无限质询/); assert.match(STG_PERSONA, /不把导入.*当成模块掌握/);
@@ -109,9 +115,12 @@ test('a workspace initialization conversation continues into the first course in
   assert.equal((await coordinator.acquire({ workspaceId: 'w', courseId: 'math/1' })).id, 'initial');
   assert.equal(patch.patch.courseSessions['math/1'], 'initial');
 });
-test('bundled teaching Skill 1.2.0 exposes integrated clarification and complete per-round guide rules', async () => {
+test('bundled teaching Skill keeps clarification, per-round guides and evidence-based grading', async () => {
   const root = new URL('../skills/stg-mentor/', import.meta.url);
   const pkg = JSON.parse(await fs.readFile(new URL('package.json', root), 'utf8'));
   const entry = await fs.readFile(new URL('SKILL.md', root), 'utf8');
-  assert.equal(pkg.version, '1.2.0'); assert.match(entry, /grill-me 式需求澄清/); assert.match(entry, /不要求安装\/调用外部 skill/); assert.match(entry, /第N轮_教学引导/);
+  assert.equal(pkg.version, '1.3.0');
+  assert.match(entry, /内置的 grill-me 式需求澄清/);
+  assert.match(entry, /第N轮_教学引导/);
+  assert.match(entry, /正式评估前仍须重读所存答案/);
 });

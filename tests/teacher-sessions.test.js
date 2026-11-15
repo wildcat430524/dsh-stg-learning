@@ -142,6 +142,17 @@ test('an explicit pick becomes the Session later questions use, not the previous
   later.reference.release();
 });
 
+test('continuing an opening retains the exact Session without creating or rebinding anything', async () => {
+  const f = fixture({ state: { revision: 3, courseSessions: { _workspace: 'newer' } }, rows: { saved: row('saved'), newer: row('newer'), archived: row('archived') }, archived: ['archived'] });
+  const resumed = await f.coordinator.select({ workspaceId: 'w', sessionId: 'saved', bind: false });
+  assert.equal(resumed.id, 'saved');
+  resumed.reference.release();
+  await assert.rejects(f.coordinator.select({ workspaceId: 'w', sessionId: 'archived', bind: false }), /已经移出列表/);
+  assert.deepEqual(f.state(), { revision: 3, courseSessions: { _workspace: 'newer' } });
+  assert.deepEqual(f.counts(), { creates: 0, retains: 1, releases: 1 });
+  assert.deepEqual(f.calls, []);
+});
+
 test('rapid create then select is serialized so the later pick wins and only one Session is made', async () => {
   const f = fixture({ rows: { existing: row('existing', { blank: false }) }, retainDelay: 1 });
   const created = f.coordinator.createNew({ workspaceId: 'w', courseId: 'course' });

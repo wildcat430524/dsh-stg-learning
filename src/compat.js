@@ -4,7 +4,7 @@
  * The npm `dsh` channel only publishes prereleases for the 0.2 line, and the
  * host evaluates `engines.dsh` with `includePrerelease: true`. A caret or
  * `>=`/`<` range would therefore also admit untested prereleases (for example
- * `0.2.1-alpha.5` or a future `0.2.2-rc.2`). Every supported version is listed
+ * `0.2.1-alpha.5`). Every supported version is listed
  * exactly, so a host the plugin has not been accepted on is reported as
  * incompatible instead of silently loading it.
  *
@@ -22,6 +22,7 @@ export const VERIFIED_DSH_VERSIONS = Object.freeze([
   '0.2.1-rc.4',
   '0.2.1-rc.5',
   '0.2.2-rc.1',
+  '0.2.2-rc.3',
 ]);
 
 /** Exact disjunction kept in sync with `engines.dsh` in package.json. */

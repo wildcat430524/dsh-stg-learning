@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { cp, mkdir, mkdtemp, readFile, rename, symlink, unlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rename, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -136,7 +136,10 @@ try {
   const sessionIds = Object.values(state.courseSessions || {});
   assert.equal(new Set(sessionIds).size, 1, 'One course should use one mentor Session');
   const catalog = await ctx.sessionSkillCatalog.list({ sessionId: sessionIds[0] }, new AbortController().signal);
-  assert.ok(catalog.skills.some(skill => skill.name === 'steps2great-skill'), 'Packaged teaching Skill is absent from the native Session catalog');
+  const skill = catalog.skills.find(entry => entry.name === 'steps2great-skill');
+  assert.ok(skill?.path, 'Packaged teaching Skill path is absent from the native Session catalog');
+  assert.equal(await realpath(skill.path), await realpath(path.join(packageDir, 'skills/stg-mentor/SKILL.md')));
+  assert.equal(skill.modelInvocable, true);
   checks.push('real mentor Session catalog includes packaged Steps2Great teaching Skill');
   const sessions = await ctx.sessionController.list({}, new AbortController().signal);
   const mentors = sessions.items.filter(session => session.projections?.values?.agentPreset === 'stg-learning-mentor');
@@ -146,11 +149,13 @@ try {
   assert.equal(new Set(legacyIds).size, 1, 'Opening the legacy course should prepare exactly one adjacent teacher');
   // Entering each existing course now opens its teacher automatically. The
   // legacy workspace is visited too; check identities, not just a total count.
-  const expectedMentors = [sessionIds[0], initialState.courseSessions._workspace, legacyIds[0]];
-  assert.equal(new Set(expectedMentors).size, 3, 'Independent learning workspaces must not share a teacher Session');
-  assert.deepEqual(mentors.map(session => session.sessionId).sort(), expectedMentors.sort(), 'Each visited learning workspace must have exactly its own teacher, without duplicates');
+  assert.equal(browser.openingSessions.length, 2, 'The opening flow should report the original and explicitly created Sessions');
+  assert.equal(initialState.courseSessions._workspace, browser.openingSessions[1]);
+  const expectedMentors = [sessionIds[0], ...browser.openingSessions, legacyIds[0]];
+  assert.equal(new Set(expectedMentors).size, 4, 'Mentors for independent spaces and the explicitly new opening must be distinct');
+  assert.deepEqual(mentors.map(session => session.sessionId).sort(), expectedMentors.sort(), 'Returning to a conversation must not create extra Sessions');
   assert.ok(sessions.items.every(session => session.blank && !session.running), 'Acceptance must leave every Session unsent');
-  checks.push('repeated full native conversation/document transitions keep one mentor per learning workspace');
+  checks.push('only an explicit new-topic action adds a mentor; returning to a conversation keeps its original Session');
   checks.push('all real Sessions remain blank and idle; no prompt or model reply is fabricated');
   success = true;
   await unlink(path.join(output, 'failure.txt')).catch(error => { if (error.code !== 'ENOENT') throw error; });

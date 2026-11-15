@@ -23,7 +23,7 @@
 
 ## 安装并开始学习
 
-v0.5.17 通过 DSH 0.2.2-rc.1 的隔离宿主验收。安装包在 `engines.dsh` 声明兼容 DSH 0.2.1-rc.1 至 rc.5，以及 0.2.2-rc.1。[v0.5.17 发布说明](docs/releases/v0.5.17.md)
+v0.5.19 通过 DSH 0.2.2-rc.3 的隔离宿主验收。安装包在 `engines.dsh` 声明兼容 DSH 0.2.1-rc.1 至 rc.5，以及 0.2.2-rc.1、rc.3。[v0.5.19 发布说明](docs/releases/v0.5.19.md)
 
 1. **安装插件**。下载 Release 附件中的 `dsh-stg-learning-*.tgz`。打开 DSH 的「插件」页，从本地文件安装并启用。若提示重启，保存当前工作后重启 DSH。
 2. **打开学习空间**。从左侧进入「学习」。新用户选择「新学习」，填名称并选择新文件夹的上一级目录。已有 StepsToGreat 资料时，点「导入已有 StepsToGreat 文件夹」，选择学习目录的根目录。
@@ -37,7 +37,7 @@ v0.5.17 通过 DSH 0.2.2-rc.1 的隔离宿主验收。安装包在 `engines.dsh`
 使用与桌面端匹配的 DSH CLI，把命令中的路径换成下载包的绝对路径。
 
 ```text
-dsh plugin --profile desktop add /absolute/path/dsh-stg-learning-0.5.17.tgz
+dsh plugin --profile desktop add /absolute/path/dsh-stg-learning-0.5.19.tgz
 ```
 
 </details>

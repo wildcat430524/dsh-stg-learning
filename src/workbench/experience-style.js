@@ -189,9 +189,6 @@ html[data-ds-dark-theme] :is(.stgw-root,.stgj-root,.stgt-frame),
 .stgj-root{font-family:inherit}
 .stgj-root .stgj-header{height:52px;min-height:52px;padding:0 var(--stgw-gutter);gap:16px;background:var(--stgw-paper);border-bottom:1px solid var(--stgw-line)}
 .stgj-root .stgj-brand strong{display:block;max-width:min(40vw,360px)}
-.stgj-root .stgj-kickoff{background:var(--stgw-paper);border-radius:var(--stgw-radius-panel);padding:24px}
-.stgj-root .stgj-mode-options button{border-radius:var(--stgw-radius-control)!important}
-.stgj-root .stgj-welcome{max-width:840px;padding:48px var(--stgw-gutter)}
 @keyframes stgw-pop-in{from{opacity:0;translate:0 -4px}to{opacity:1;translate:0 0}}
 @keyframes stgw-spin{to{rotate:360deg}}@keyframes stgw-check-in{from{stroke-dashoffset:18}to{stroke-dashoffset:0}}@keyframes stgw-breathe{50%{opacity:.5}}
 .stgw-onboarding{background:var(--stgwo-bg)}
@@ -202,7 +199,7 @@ html[data-ds-dark-theme] :is(.stgw-root,.stgj-root,.stgt-frame),
  .stgw-root :is(.stgw-record,.stgw-previous)::details-content{block-size:0;overflow:clip;transition:block-size var(--stgw-motion-normal) var(--stgw-ease),content-visibility var(--stgw-motion-normal) allow-discrete}
  .stgw-root :is(.stgw-record,.stgw-previous)[open]::details-content{block-size:auto}
 }
-@media(max-width:700px){.stgw-root .stgw-document-access{gap:8px;padding:0 16px;flex-wrap:wrap}.stgw-page-tabs{flex-basis:100%;gap:12px!important}.stgw-root .stgw-course-picker{margin:0 0 8px auto;max-width:100%;height:28px}.stgw-root .stgw-main-tools{padding:7px 16px;min-height:46px;gap:8px}.stgw-root .stgw-tabs button{min-width:40px;padding:5px 10px}.stgw-root .stgw-save-state{display:none}.stgw-root .stgw-content,.stgw-root .stgw-progress-page{max-width:none;margin:0;padding:22px 20px 48px;border:0;border-radius:0;box-shadow:none}.stgw-root .stgw-reading-skeleton{padding:20px 22px 48px;margin:0;border:0;border-radius:0}.stgw-root .stgw-lesson-heading .stgw-lesson-title{font-size:15px}.stgw-root .stgw-markdown h1{font-size:25px}.stgw-root .stgw-markdown h2{font-size:22px}.stgw-root .stgw-markdown h3{font-size:18.5px}.stgw-root .stgw-library-inner{padding:28px 22px}.stgw-root .stgw-library-card{padding:20px}.stgj-root .stgj-header{padding:0 16px}.stgj-root .stgj-welcome{padding:28px 22px}.stgj-root .stgj-kickoff{padding:20px}}
+@media(max-width:700px){.stgw-root .stgw-document-access{gap:8px;padding:0 16px;flex-wrap:wrap}.stgw-page-tabs{flex-basis:100%;gap:12px!important}.stgw-root .stgw-course-picker{margin:0 0 8px auto;max-width:100%;height:28px}.stgw-root .stgw-main-tools{padding:7px 16px;min-height:46px;gap:8px}.stgw-root .stgw-tabs button{min-width:40px;padding:5px 10px}.stgw-root .stgw-save-state{display:none}.stgw-root .stgw-content,.stgw-root .stgw-progress-page{max-width:none;margin:0;padding:22px 20px 48px;border:0;border-radius:0;box-shadow:none}.stgw-root .stgw-reading-skeleton{padding:20px 22px 48px;margin:0;border:0;border-radius:0}.stgw-root .stgw-lesson-heading .stgw-lesson-title{font-size:15px}.stgw-root .stgw-markdown h1{font-size:25px}.stgw-root .stgw-markdown h2{font-size:22px}.stgw-root .stgw-markdown h3{font-size:18.5px}.stgw-root .stgw-library-inner{padding:28px 22px}.stgw-root .stgw-library-card{padding:20px}.stgj-root .stgj-header{padding:0 16px}}
 @media(prefers-reduced-motion:reduce){:is(.stgw-root,.stgj-root,.stgw-onboarding) *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media(forced-colors:active){.stgw-sliding-indicator{background:Highlight}.stgw-root .stgw-page-tabs button[aria-pressed=true]{outline:1px solid Highlight;outline-offset:-3px}.stgw-spinner{border-top-color:Highlight}}
 `;

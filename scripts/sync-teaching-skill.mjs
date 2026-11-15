@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const source = path.resolve(process.argv[2] || 'E:/Steps2Great-skill');
 const commit = process.argv[3];
-const previousCommit = '74313f99ea6300dd195c7297efcfb1529e5b03da';
+const previousCommit = 'f8fc81cfd4305da0e627a8a0434c1d153294fc02';
 if (!/^[a-f0-9]{40}$/.test(commit || '')) throw Error('Pass the exact verified upstream commit.');
 const target = path.join(root, 'skills', 'stg-mentor');
 if (path.resolve(target) !== path.resolve(root, 'skills/stg-mentor')) throw Error('Unexpected destination.');
@@ -18,6 +18,8 @@ const tree = ref => git(['ls-tree', '-r', '-z', '--full-tree', ref]).toString('u
 });
 const allowed = file => /^(?:references|scripts|templates|assets|docs|tests|evals|_build)\//.test(file) || ['SKILL.md', 'README.md', 'README.en.md', 'LICENSE', 'LICENSE-DOCS', 'package.json', 'CONTRIBUTING.md'].includes(file);
 const previous = new Map(tree(previousCommit).map(entry => [entry.file, entry]));
+// The verified 0.5.18 bundle had one local teaching entry over the 1.2.0 snapshot.
+const previousBundledSkill = '533884755e41ac621afcfee943d7c10f2d242fa7';
 const selected = tree(commit).filter(entry => allowed(entry.file));
 const next = new Map(selected.map(entry => [entry.file, entry]));
 for (const entry of selected) if (entry.mode !== '100644' || entry.kind !== 'blob' || entry.file.split('/').some(part => part === '..' || part === '' || part.includes('\\'))) throw Error('Unsafe source entry: ' + entry.file);
@@ -31,7 +33,8 @@ async function walk(directory, prefix = '') {
     else {
       const original = previous.get(file);
       const hash = blobHash(await fs.readFile(absolute));
-      if (hash !== original?.id && hash !== next.get(file)?.id) throw Error('Unexpected local vendored modification; preserved: ' + file);
+      const knownBundledEntry = file === 'SKILL.md' && hash === previousBundledSkill;
+      if (!knownBundledEntry && hash !== original?.id && hash !== next.get(file)?.id) throw Error('Unexpected local vendored modification; preserved: ' + file);
       existing.push(file);
     }
   }

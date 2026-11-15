@@ -18,6 +18,7 @@ export function exportProject(upstream, target, check = false) {
   for (const rel of ['.cursor', '.trae', '.agents', '.qoder']) walk(rel);
   files.add('tests/README.md');
   files.add('tests/progress-view.test.mjs');
+  files.add('tests/routing-contract.test.mjs');
   files.add('tests/state-regression.mjs');
   files.add('package-lock.json');
   const setup = readFileSync(join(upstream, '_tools/setup-agents.mjs'), 'utf8');

@@ -285,15 +285,18 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
     isLive: target => mounted.current && currentWorkspace.current === target.workspaceId,
     onChange: patch => { if (mounted.current) setSwitchState(current => ({ ...current, ...patch })); },
   });
-  async function connect(context = {}, { stage = false, inline = true } = {}) {
+  async function connect(context = {}, { stage = false, inline = true, sessionId } = {}) {
+    const generation = connectionGeneration.current, workspaceId = workspace?.workspaceId;
     return exclusive(async () => {
-      if (!workspace) throw Error('学习空间尚未就绪，请重新打开。');
+      if (!workspaceId) throw Error('学习空间尚未就绪，请重新打开。');
+      if (!mounted.current || generation !== connectionGeneration.current || currentWorkspace.current !== workspaceId) throw Error('学习位置已经改变，请在当前课程重新提问。');
       if (pending.current) throw Error('导师连接正在处理中，请稍候再试。');
       pending.current = true; setBusy(true); setError('');
       let retained, ticket, ownsReference = false;
-      const generation = connectionGeneration.current, workspaceId = workspace.workspaceId, courseId = context.course?.id || '_workspace';
+      const courseId = context.course?.id || '_workspace';
       try {
-        if (inline && teacherRef.current?.workspaceId === workspaceId && teacherRef.current?.courseId === courseId) retained = teacherRef.current;
+        if (sessionId) { retained = await mentorSessions.select({ workspaceId, courseId, sessionId, bind: false }); ownsReference = true; }
+        else if (inline && teacherRef.current?.workspaceId === workspaceId && teacherRef.current?.courseId === courseId) retained = teacherRef.current;
         else { retained = await mentorSessions.acquire({ workspaceId, courseId }); ownsReference = true; }
         if (!mounted.current || generation !== connectionGeneration.current || currentWorkspace.current !== workspaceId) throw Error('学习位置已经改变，请在当前课程重新提问。');
         if (inline) {
@@ -318,18 +321,19 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
    * opening staged for review. Nothing is sent automatically.
    */
   async function restart(context = {}) {
+    const generation = connectionGeneration.current, workspaceId = workspace?.workspaceId;
     return exclusive(async () => {
-      if (!workspace) throw Error('学习空间尚未就绪，请重新打开。');
+      if (!workspaceId) throw Error('学习空间尚未就绪，请重新打开。');
+      if (!mounted.current || generation !== connectionGeneration.current || currentWorkspace.current !== workspaceId) throw Error('学习位置已经改变，请在当前学习空间重新开始。');
       if (pending.current) throw Error('导师连接正在处理中，请稍候再试。');
       pending.current = true; setBusy(true); setError('');
-      const generation = connectionGeneration.current, workspaceId = workspace.workspaceId, courseId = context.course?.id || '_workspace';
+      const courseId = context.course?.id || '_workspace';
       let retained, ticket;
       try {
         // Keep whatever the learner typed in the conversation they are leaving.
         try { if (teacherRef.current?.id) draftRegistry.persist(teacherRef.current.id); } catch { /* The conversation itself is untouched. */ }
         retained = await mentorSessions.createNew({ workspaceId, courseId });
         if (!mounted.current || generation !== connectionGeneration.current || currentWorkspace.current !== workspaceId) {
-          retained.reference?.release?.();
           throw Error('学习位置已经改变，请在当前课程重新开始。');
         }
         ticket = mailbox.enqueue(retained.id, buildMentorDraft(context), { intent: 'initialize' });
@@ -363,7 +367,15 @@ function NativeWorkbench({ useWorkspaces, api, mentorSessions, draftRegistry, op
     onArchiveCancel: () => archive.current.cancel(),
     onRestore: row => { void archive.current.restore(row); },
   });
-  return h('div', { className: 'stgw-native' }, h(TeacherFrame, { open: !!teacher, onClose: closeTeacher, onExpand: () => teacher && openSession(teacher.id), error: error || switchState.error, notice: switchState.status && !switchState.busy ? switchState.status : '', sessionControl, teacher: teacher && h(SessionProvider, { session: teacher.reference }, renderSlot('stg.learning.teacher', {})) }, h(LearningJourney, { key: workspace.workspaceId, api, workspace, workspaces, mentor: { visible: !!teacher, busy, error, isSavedAvailable: id => sessionRows.some(row => row.id === id), onAsk: context => connect(context, { stage: true, inline: !['initialize', 'assess'].includes(context.intent) }), onConnect: context => connect(context), onContinue: context => connect(context), onRestart: context => restart(context) }, onOpenLibrary: () => choose(''), onBack: () => selectPanel(null), onManageSessions, onOpenSession: context => connect(context), renderDocumentEditor })));
+  const mentor = {
+    visible: !!teacher, busy, error,
+    isSavedAvailable: id => sessionsSnapshot.phase === 'ready' ? sessionRows.some(row => row.id === id) : null,
+    onAsk: context => connect(context, { stage: true, inline: !['initialize', 'assess'].includes(context.intent) }),
+    onConnect: context => connect(context),
+    onContinue: (context, sessionId) => connect(context, { inline: false, sessionId }),
+    onRestart: restart,
+  };
+  return h('div', { className: 'stgw-native' }, h(TeacherFrame, { open: !!teacher, onClose: closeTeacher, onExpand: () => teacher && openSession(teacher.id), error: error || switchState.error, notice: switchState.status && !switchState.busy ? switchState.status : '', sessionControl, teacher: teacher && h(SessionProvider, { session: teacher.reference }, renderSlot('stg.learning.teacher', {})) }, h(LearningJourney, { key: workspace.workspaceId, api, workspace, workspaces, mentor, onOpenLibrary: () => choose(''), onBack: () => selectPanel(null), onManageSessions, onOpenSession: context => connect(context), renderDocumentEditor })));
 }
 
 export function applyNative(ctx, { renderDocumentEditor, onManageSessions } = {}) {

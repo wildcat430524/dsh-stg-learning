@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorkbenchHandler, createWorkspaceResolver, installWorkbenchBridge } from '../src/bridge.js';
 import { createWorkbenchApi, WorkbenchApiError } from '../src/api.js';
+import { VERIFIED_DSH_VERSIONS } from '../src/compat.js';
 
 test('workspace resolution uses only registered identity and never a supplied root', async () => {
   const resolve = createWorkspaceResolver({ get: id => id === 'registered' ? { path: 'E:/lessons', title: '学习' } : undefined });
@@ -18,7 +19,7 @@ test('native bridge registers only authenticated Connection routes', () => {
   assert.deepEqual(routes.find(route => route.path.endsWith('/document')).methods, ['GET', 'HEAD', 'POST', 'PUT']);
   assert.deepEqual(routes.find(route => route.path.endsWith('/state')).methods, ['GET', 'HEAD', 'POST', 'PATCH']);
   assert.throws(() => installWorkbenchBridge({ workspaceRegistry: ctx.workspaceRegistry }), /Connection authenticated Fetch routes/);
-  assert.throws(() => installWorkbenchBridge({ workspaceRegistry: ctx.workspaceRegistry }), /0\.2\.1-rc\.1 through 0\.2\.1-rc\.5/);
+  assert.throws(() => installWorkbenchBridge({ workspaceRegistry: ctx.workspaceRegistry }), error => VERIFIED_DSH_VERSIONS.every(version => error.message.includes(version)));
 });
 
 test('a host without a directory picker still serves every non-picker route', async () => {
